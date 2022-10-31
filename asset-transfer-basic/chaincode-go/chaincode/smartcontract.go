@@ -17,7 +17,8 @@ type SmartContract struct {
 // Insert struct field in alphabetic order => to achieve determinism across languages
 // golang keeps the order when marshal to json but doesn't order automatically
 type Energy struct {
-	AppraisedValue int       `json:"AppraisedValue"`
+	DocType string `json:"DocType`
+	AppraisedValue float64       `json:"AppraisedValue"`
 	GeneratedTime  time.Time `json:"Generated Time"`
 	PurchasedTime  time.Time `json:"Purchased Time"`
 	ID             string    `json:"ID"`
@@ -34,18 +35,24 @@ type Energy struct {
 // Owner: Brad, Jin Soo, Max, Adriana, Michel
 func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
 	energies := []Energy{
-		{ID: "energy1", LargeCategory: "Green", SmallCategory: "solor", Status: "generated",
-			Producer: "Tomoko", Latitude: 1, Longitude: 1, AppraisedValue: 0},
-		{ID: "energy2", LargeCategory: "Green", SmallCategory: "solor", Status: "generated",
-			Producer: "Tomoko", Owner: "Brad", Latitude: 1, Longitude: 1, AppraisedValue: 0},
-		{ID: "energy3", LargeCategory: "Green", SmallCategory: "solor", Status: "sold",
-			Owner: "Jin Soo", Latitude: 1, Longitude: 1, AppraisedValue: 100},
-		{ID: "energy4", LargeCategory: "Green", SmallCategory: "solor", Status: "generated",
-			Owner: "Max", Latitude: 1, Longitude: 1, AppraisedValue: 0},
-		{ID: "energy5", LargeCategory: "Green", SmallCategory: "solor", Status: "generated",
-			Owner: "Adriana", Latitude: 1, Longitude: 1, AppraisedValue: 0},
-		{ID: "energy6", LargeCategory: "Green", SmallCategory: "solor", Status: "generated",
-			Owner: "Michel", Latitude: 1, Longitude: 1, AppraisedValue: 0},
+		{DocType: "cost", ID:"solor-power-cost", AppraisedValue:0.02,
+			LargeCategory: "green", SmallCategory: "solor"},
+		{DocType: "cost", ID:"wind-power-cost", AppraisedValue: 0.02, 
+			LargeCategory: "green", SmallCategory: "wind"},
+		{DocType: "cost", ID:"thermal-power-cost", AppraisedValue: 0.02, 
+		LargeCategory: "depletable", SmallCategory: "thermal"},		
+		{DocType:"token", ID: "energy1", LargeCategory: "green", SmallCategory: "solor", Status: "generated",
+			Producer: "Tomoko", Latitude: 1, Longitude: 1},
+		{DocType:"token", ID: "energy2", LargeCategory: "green", SmallCategory: "solor", Status: "generated",
+			Producer: "Tomoko", Owner: "Brad", Latitude: 1, Longitude: 1},
+		{DocType:"token", ID: "energy3", LargeCategory: "green", SmallCategory: "solor", Status: "sold",
+			Owner: "Jin Soo", Latitude: 1, Longitude: 1, AppraisedValue: 1.0},
+		{DocType:"token", ID: "energy4", LargeCategory: "green", SmallCategory: "solor", Status: "generated",
+			Owner: "Max", Latitude: 1, Longitude: 1},
+		{DocType:"token", ID: "energy5", LargeCategory: "green", SmallCategory: "solor", Status: "generated",
+			Owner: "Adriana", Latitude: 1, Longitude: 1},
+		{DocType:"token", ID: "energy6", LargeCategory: "green", SmallCategory: "solor", Status: "generated",
+			Owner: "Michel", Latitude: 1, Longitude: 1},
 	}
 
 	for _, energy := range energies {
@@ -69,7 +76,7 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 // 引数は、ID、緯度、経度、エネルギーの種類、発電した時間、発電者、価格
 // トークンには、オーナー、ステータスも含める
 func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
-	id string, latitude float64, longitude float64, producer string, largeCategory string, smallCategory string, appraisedValue int) error {
+	id string, latitude float64, longitude float64, producer string, largeCategory string, smallCategory string, timestamp time.Time) error {
 	exists, err := s.EnergyExists(ctx, id)
 	if err != nil {
 		return err
@@ -77,8 +84,9 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 	if exists {
 		return fmt.Errorf("the energy %s already exists", id)
 	}
-
+	
 	energy := Energy{
+		DocType: "token",
 		ID:             id,
 		Latitude:       latitude,
 		Longitude:      longitude,
@@ -86,9 +94,8 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 		Producer:       producer,
 		LargeCategory:  largeCategory,
 		SmallCategory:  smallCategory,
-		AppraisedValue: appraisedValue,
 		Status:         "generated",
-		GeneratedTime:  time.Now(),
+		GeneratedTime: timestamp,
 	}
 	energyJSON, err := json.Marshal(energy)
 	if err != nil {
@@ -100,7 +107,7 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 
 // TransferAsset updates the owner field of asset with given id in world state, and returns the old owner.
 // 購入する
-func (s *SmartContract) TransferAsset(ctx contractapi.TransactionContextInterface, id string, newOwner string) (string, error) {
+func (s *SmartContract) TransferAsset(ctx contractapi.TransactionContextInterface, id string, newOwner string, appraisedValue float64, timestamp time.Time) (string, error) {
 	energy, err := s.ReadAsset(ctx, id)
 	if err != nil {
 		return "", err
@@ -112,7 +119,7 @@ func (s *SmartContract) TransferAsset(ctx contractapi.TransactionContextInterfac
 
 	// UpdateAssetを改良してステータスを変更するようにしても良いかも
 	if energy.GeneratedTime.After(tCompare) == true {
-		energy.PurchasedTime = time.Now()
+		energy.PurchasedTime = timestamp
 	} else {
 		return "", fmt.Errorf("the energy %s was generated more than 30min ago", id)
 	}
@@ -126,6 +133,7 @@ func (s *SmartContract) TransferAsset(ctx contractapi.TransactionContextInterfac
 	oldOwner := energy.Owner
 	energy.Owner = newOwner
 
+	energy.AppraisedValue = appraisedValue
 	energyJSON, err := json.Marshal(energy)
 	if err != nil {
 		return "", err
@@ -135,6 +143,10 @@ func (s *SmartContract) TransferAsset(ctx contractapi.TransactionContextInterfac
 	if err != nil {
 		return "", err
 	}
+
+	// var user []byte
+	// user, err = (ctx.GetStub().GetCreator())
+	// oldOwner = string(user)
 
 	return oldOwner, nil
 }
@@ -196,7 +208,7 @@ func (s *SmartContract) UpdateAsset(ctx contractapi.TransactionContextInterface,
 }
 
 func (s *SmartContract) QueryByStatus(ctx contractapi.TransactionContextInterface, status string) ([]*Energy, error) {
-	queryString := fmt.Sprintf(`{"selector":{"status":"%s"}}`, status)
+	queryString := fmt.Sprintf(`{"selector":{"DocType":"token","Status":"%s"}}`, status)
 	// queryString := fmt.Sprintf(`{"selector":{"docType":"asset","owner":"%s"}}`, owner)
 
 	resultsIterator, err := ctx.GetStub().GetQueryResult(queryString)

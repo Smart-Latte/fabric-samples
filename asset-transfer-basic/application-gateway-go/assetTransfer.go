@@ -39,7 +39,7 @@ const (
 )
 
 var now = time.Now()
-var assetId = fmt.Sprintf("asset%d", now.Unix()*1e3+int64(now.Nanosecond())/1e6)
+var assetId = fmt.Sprintf("energy%d", now.Unix()*1e3+int64(now.Nanosecond())/1e6)
 
 func main() {
 	log.Println("============ application-golang starts ============")
@@ -79,11 +79,11 @@ func main() {
 	fmt.Println("createAsset:")
 	createAsset(contract)
 
-	fmt.Println("readAssetByID:")
-	readAssetByID(contract)
+	fmt.Println("transferAsset:")
+	transferAsset(contract)
 
-	fmt.Println("transferAssetAsync:")
-	transferAssetAsync(contract)
+	fmt.Println("queryByStatus:")
+	queryByStatus(contract)
 
 	fmt.Println("exampleErrorHandling:")
 	exampleErrorHandling(contract)
@@ -187,20 +187,40 @@ func getAllAssets(contract *client.Contract) {
 // Submit a transaction synchronously, blocking until it has been committed to the ledger.
 func createAsset(contract *client.Contract) {
 	fmt.Printf("Submit Transaction: CreateAsset, creates new asset with ID, Color, Size, Owner and AppraisedValue arguments \n")
-
-	_, err := contract.SubmitTransaction("CreateAsset", assetId, 1, 10, "Tom", "Green", "solor", 100)
+	var timestamp = time.Now()
+	var layout = "2006-01-02T15:04:00Z"
+	var stringTimestamp = timestamp.Format(layout)
+	fmt.Printf("%s\n", stringTimestamp)
+	result, err := contract.SubmitTransaction("CreateAsset", assetId, "1", "10", "Tom", "Green", "solor", stringTimestamp)
 	if err != nil {
 		panic(fmt.Errorf("failed to submit transaction: %w", err))
 	}
-
+	//result :=  formatJSON(jsonResult)
+	fmt.Printf("%s\n", result)
 	fmt.Printf("*** Transaction committed successfully\n")
 }
 
 // Evaluate a transaction by assetID to query ledger state.
-func readAssetByID(contract *client.Contract) {
-	fmt.Printf("Evaluate Transaction: ReadAsset, function returns asset attributes\n")
+func transferAsset(contract *client.Contract) {
+	fmt.Printf("Evaluate Transaction: TransferAsset, function returns asset attributes\n")
+	var timestamp = time.Now()
+	var layout = "2006-01-02T15:04:00Z"
+	var stringTimestamp = timestamp.Format(layout)
+	evaluateResult, err := contract.SubmitTransaction("TransferAsset", assetId, "Mayuko", "1", stringTimestamp)
+	if err != nil {
+		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
+	}
+	//result := formatJSON(evaluateResult)
 
-	evaluateResult, err := contract.EvaluateTransaction("ReadAsset", assetId)
+	fmt.Printf("*** Result:%s\n", evaluateResult)
+}
+
+// Submit transaction asynchronously, blocking until the transaction has been sent to the orderer, and allowing
+// this thread to process the chaincode response (e.g. update a UI) without waiting for the commit notification
+func queryByStatus(contract *client.Contract) {
+	fmt.Printf("Async Submit Transaction: QueryByStatus, updates existing asset owner'\n")
+
+	evaluateResult, err := contract.EvaluateTransaction("QueryByStatus", "generated")
 	if err != nil {
 		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
 	}
@@ -209,30 +229,8 @@ func readAssetByID(contract *client.Contract) {
 	fmt.Printf("*** Result:%s\n", result)
 }
 
-// Submit transaction asynchronously, blocking until the transaction has been sent to the orderer, and allowing
-// this thread to process the chaincode response (e.g. update a UI) without waiting for the commit notification
-func transferAssetAsync(contract *client.Contract) {
-	fmt.Printf("Async Submit Transaction: TransferAsset, updates existing asset owner'\n")
-
-	submitResult, commit, err := contract.SubmitAsync("TransferAsset", client.WithArguments(assetId, "Mark"))
-	if err != nil {
-		panic(fmt.Errorf("failed to submit transaction asynchronously: %w", err))
-	}
-
-	fmt.Printf("Successfully submitted transaction to transfer ownership from %s to Mark. \n", string(submitResult))
-	fmt.Println("Waiting for transaction commit.")
-
-	if status, err := commit.Status(); err != nil {
-		panic(fmt.Errorf("failed to get commit status: %w", err))
-	} else if !status.Successful {
-		panic(fmt.Errorf("transaction %s failed to commit with status: %d", status.TransactionID, int32(status.Code)))
-	}
-
-	fmt.Printf("*** Transaction committed successfully\n")
-}
-
 // Submit transaction, passing in the wrong number of arguments ,expected to throw an error containing details of any error responses from the smart contract.
-func exampleErrorHandling(contract *client.Contract) {""
+func exampleErrorHandling(contract *client.Contract) {
 	fmt.Println("Submit Transaction: UpdateAsset asset70, asset70 does not exist and should return an error")
 
 	_, err := contract.SubmitTransaction("UpdateAsset", "energy2")
