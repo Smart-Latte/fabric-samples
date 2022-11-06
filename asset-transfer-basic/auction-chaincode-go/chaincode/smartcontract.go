@@ -50,17 +50,17 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 			LargeCategory: "green", SmallCategory: "wind"},
 		{DocType: "cost", ID: "thermal-power-cost", UnitPrice: 0.02,
 			LargeCategory: "depletable", SmallCategory: "thermal"},
-		{DocType:"token", ID: "energy1", LargeCategory: "green", SmallCategory: "solor", Status: "generated", Producer: "User1", 
+		{DocType:"token", ID: "energy1", LargeCategory: "green", SmallCategory: "solor", Status: "generated", Producer: "User1", Owner: "User1",
 		Latitude: 35.547766481196525, Longitude: 39.67124467488006, UnitPrice: 0.02, BidPrice: 0.02, GeneratedTime: time1, AuctionStartTime: time},
-		{DocType:"token", ID: "energy2", LargeCategory: "green", SmallCategory: "solor", Status: "generated", Producer: "User2", 
-			Owner: "User2", Latitude: 35.54687478299901, Longitude: 139.67115184675248, UnitPrice: 0.02, BidPrice: 0.02, GeneratedTime: time1, AuctionStartTime: time1},
-		{DocType:"token", ID: "energy3", LargeCategory: "green", SmallCategory: "solor", Status: "sold", Owner: "User3", 
+		{DocType:"token", ID: "energy2", LargeCategory: "green", SmallCategory: "solor", Status: "generated", Producer: "User2", Owner: "User2",
+		Latitude: 35.54687478299901, Longitude: 139.67115184675248, UnitPrice: 0.02, BidPrice: 0.02, GeneratedTime: time1, AuctionStartTime: time1},
+		{DocType:"token", ID: "energy3", LargeCategory: "green", SmallCategory: "solor", Status: "sold", Producer: "User3", Owner: "User1",
 		Latitude: 35.54687478299901, Longitude: 139.67115184675248},
-		{DocType:"token", ID: "energy4", LargeCategory: "green", SmallCategory: "solor", Status: "generated", Owner: "User4", 
+		{DocType:"token", ID: "energy4", LargeCategory: "green", SmallCategory: "solor", Status: "generated", Producer: "User4", Owner: "User4", 
 		Latitude: 35.5552824466371, Longitude: 139.65527497388206, UnitPrice: 0.02, BidPrice: 0.02, GeneratedTime: time1, AuctionStartTime: time1},
-		{DocType:"token", ID: "energy5", LargeCategory: "green", SmallCategory: "solor", Status: "generated", Owner: "User1", 
+		{DocType:"token", ID: "energy5", LargeCategory: "green", SmallCategory: "solor", Status: "generated", Producer: "User1", Owner: "User1",
 		Latitude: 35.547766481196525, Longitude: 139.67124467488006, UnitPrice: 0.02, BidPrice: 0.02, GeneratedTime: time1, AuctionStartTime: time1},
-		{DocType:"token", ID: "energy6", LargeCategory: "green", SmallCategory: "solor", Status: "generated", Owner: "User5", 
+		{DocType:"token", ID: "energy6", LargeCategory: "green", SmallCategory: "solor", Status: "generated", Producer: "User5", Owner: "User5", 
 		Latitude: 35.64914672135123, Longitude: 139.7429409664394, UnitPrice: 0.02, BidPrice: 0.02, GeneratedTime: time1, AuctionStartTime: time1},
 	}
 
@@ -140,7 +140,6 @@ func (s *SmartContract) BidOnToken(ctx contractapi.TransactionContextInterface, 
 	var generatedTimeCompare = timestamp.Add(time.Minute * -30)
 	var auctionStartTimeCompare = timestamp.Add(time.Minute * -5)
 
-	// UpdateAssetを改良してステータスを変更するようにしても良いかも
 	if energy.GeneratedTime.After(generatedTimeCompare) == false {
 		return "", fmt.Errorf("the energy %s was generated more than 30min ago", id)
 	}
@@ -190,17 +189,26 @@ func (s *SmartContract) AuctionEnd(ctx contractapi.TransactionContextInterface, 
 		return "", err
 	}
 
-	if energy.Owner != energy.Producer {
-		energy.Status = "sold"
-		returnMessage = "the energy " + id + " was sold"
-	} else if energy.GeneratedTime.After(generatedTimeCompare) == false {
-		energy.Status = "old"
-		returnMessage = "the energy " + id + " was generated more than 30min ago"
-	} else if energy.AuctionStartTime.After(auctionStartTimeCompare) == false {
-		energy.AuctionStartTime = timestamp
-		returnMessage = "the energy " + id + " was generated more than 5min ago. The Action Start Time was updated"
-	} else {
-		returnMessage = ("Why did you call this function?")
+	if energy.GeneratedTime.After(generatedTimeCompare) == false {
+		if energy.Owner == energy.Producer {
+			energy.Status = "old"
+			returnMessage = "the energy " + id + " was generated more than 30min ago. This was not sold."
+		}else{
+			energy.Status = "sold"
+			returnMessage = "the energy " + id + " was sold. It was generetad more than 30min ago."
+		}
+	}else{
+		if energy.AuctionStartTime.After(auctionStartTimeCompare) == false {
+			if energy.Owner == energy.Producer {
+				energy.AuctionStartTime = timestamp
+				returnMessage = "the energy " + id + " was generated more than 5min ago. The Action Start Time was updated."
+			}else{
+				energy.Status = "sold"
+				returnMessage = "the energy " + id + " was sold"
+			}
+		}else{
+			returnMessage = ("Why did you call this function?")
+		}
 	}
 
 	err = s.UpdateToken(ctx, energy)
@@ -343,7 +351,7 @@ func (s *SmartContract) QueryByLocationRange(ctx contractapi.TransactionContextI
 }
 
 // GetAllAssets returns all assets found in world state
-func (s *SmartContract) GetAllAssets(ctx contractapi.TransactionContextInterface) ([]*Energy, error) {
+func (s *SmartContract) GetAllTokens(ctx contractapi.TransactionContextInterface) ([]*Energy, error) {
 	// range query with empty string for startKey and endKey does an
 	// open-ended query of all assets in the chaincode namespace.
 	resultsIterator, err := ctx.GetStub().GetStateByRange("", "")
