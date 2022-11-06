@@ -41,6 +41,21 @@ const (
 var now = time.Now()
 var assetId = fmt.Sprintf("energy%d", now.Unix()*1e3+int64(now.Nanosecond())/1e6)
 
+type Energy struct {
+	DocType string `json:"DocType`
+	AppraisedValue float64       `json:"AppraisedValue"`
+	GeneratedTime  time.Time `json:"Generated Time"`
+	PurchasedTime  time.Time `json:"Purchased Time"`
+	ID             string    `json:"ID"`
+	LargeCategory  string    `json:"LargeCategory"`
+	Latitude       float64   `json:"Latitude"`
+	Longitude      float64   `json:"Longitude"`
+	Owner          string    `json:"Owner"`
+	Producer       string    `json:"Producer"`
+	SmallCategory  string    `json:"SmallCategory"`
+	Status         string    `json:"Status"`
+}
+
 func main() {
 	log.Println("============ application-golang starts ============")
 
@@ -89,6 +104,9 @@ func main() {
 	exampleErrorHandling(contract)
 
 	log.Println("============ application-golang ends ============")
+}
+func buy(contract *client.Contract) {
+
 }
 
 // newGrpcConnection creates a gRPC connection to the Gateway server.
