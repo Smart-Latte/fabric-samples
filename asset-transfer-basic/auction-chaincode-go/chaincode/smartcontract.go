@@ -79,6 +79,39 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 	return nil
 }
 
+func (s *SmartContract) UpdateUnitPrice(ctx contractapi.TransactionContextInterface, 
+	smallCategory string, newUnitPrice float64, timestamp time.Time) error {
+		var id = smallCategory + "power-cost"
+		cost, err := s.ReadToken(ctx, id)
+		if err != nil {
+			return err
+		}
+		cost.UnitPrice = newUnitPrice
+		cost.GenereatedTime = timestamp
+
+		costJSON, err := json.Marshal(cost)
+			if err != nil {
+				return err
+			}
+
+		return ctx.GetStub().PutState(id, costJSON)
+}
+
+func (s *SmartContract) DiscountUnitPrice(ctx contractapi.TransactionContextInterface, id string) error {
+		energy, err := s.ReadToken(ctx, id)
+		if err != nil {
+			return err
+		}
+		energy.UnitPrice = energy.UnitPrice * 0.8
+
+		energyJSON, err := json.Marshal(energy)
+			if err != nil {
+				return err
+			}
+
+		return ctx.GetStub().PutState(id, energyJSON)
+}
+
 // CreateAsset issues a new asset to the world state with given details.
 // 新しいトークンの発行
 // errorは返り値の型
@@ -135,47 +168,47 @@ func (s *SmartContract) BidOnToken(ctx contractapi.TransactionContextInterface, 
 	if err != nil {
 		return "", err
 	}
-
+	var returnMessage string
 	//generatedTime := energy.GeneratedTime
 	var generatedTimeCompare = timestamp.Add(time.Minute * -30)
 	var auctionStartTimeCompare = timestamp.Add(time.Minute * -5)
 
-	if energy.GeneratedTime.After(generatedTimeCompare) == false {
-		return "", fmt.Errorf("the energy %s was generated more than 30min ago", id)
-	}
-	if energy.AuctionStartTime.After(auctionStartTimeCompare) == false {
-		return "", fmt.Errorf("the auction of energy %s was started more than 5min ago", id)
+	if generatedTimeCompare.After(energy.GeneratedTime) == true {
+		returnMessage = "the energy " + id + " was generated more than 30min ago"
+	}else if auctionStartTimeCompare.After(energy.AuctionStartTime) == true {
+		returnMessage = "the auction of energy " + id + " was started more than 5min ago"
 	} else {
 		if energy.BidPrice >= newBidPrice {
-			return "your bid price is cheap", nil
+			returnMessage = "your bid price is cheap"
+		}else{
+			// energy.Status = "sold"
+			energy.BidTime = timestamp
+			energy.Owner = newOwner
+			energy.BidPrice = newBidPrice
+			energyJSON, err := json.Marshal(energy)
+			if err != nil {
+				return "", err
+			}
+
+			err = ctx.GetStub().PutState(id, energyJSON)
+			if err != nil {
+				return "", err
+			}
+			returnMessage = "your bid was successful"
 		}
 	}
 
-	if energy.Status == "generated" {
+	/*if energy.Status == "generated" {
 		energy.Status = "sold"
 	} else {
 		return "", fmt.Errorf("the energy %s is not for sale", id)
-	}
-
-	energy.BidTime = timestamp
-	energy.Owner = newOwner
-	energy.BidPrice = newBidPrice
-
-	energyJSON, err := json.Marshal(energy)
-	if err != nil {
-		return "", err
-	}
-
-	err = ctx.GetStub().PutState(id, energyJSON)
-	if err != nil {
-		return "", err
-	}
+	}*/
 
 	// var user []byte
 	// user, err = (ctx.GetStub().GetCreator())
 	// oldOwner = string(user)
 
-	return "your bid was successful", nil
+	return returnMessage, nil
 }
 
 func (s *SmartContract) AuctionEnd(ctx contractapi.TransactionContextInterface, id string, producer string, timestamp time.Time) (string, error) {
