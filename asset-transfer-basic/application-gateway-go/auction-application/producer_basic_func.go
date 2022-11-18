@@ -9,95 +9,177 @@ SPDX-License-Identifier: Apache-2.0
 package main
 
 import (
-	"bytes"
-	"context"
+	//"bytes"
+	//"context"
 	"encoding/json"
-	"errors"
+	//"errors"
 	"fmt"
 	"time"
+	"math/rand"
+	"strconv"
 
 	"github.com/hyperledger/fabric-gateway/pkg/client"
-	"github.com/hyperledger/fabric-protos-go-apiv2/gateway"
-	"google.golang.org/grpc/status"
+	//"github.com/hyperledger/fabric-protos-go-apiv2/gateway"
+	//"google.golang.org/grpc/status"
 )
 
-// var assetId = fmt.Sprintf("energy%d", now.Unix()*1e3+int64(now.Nanosecond())/1e6)
+/*type Energy struct {
+	DocType          string    `json:"DocType`
+	UnitPrice        float64   `json:"Unit Price"`
+	BidPrice         float64   `json:"Bid Price"`
+	GeneratedTime    time.Time `json:"Generated Time"`
+	AuctionStartTime time.Time `json:"Auction Start Time"`
+	BidTime          time.Time `json:"Bid Time"`
+	ID               string    `json:"ID"`
+	LargeCategory    string    `json:"LargeCategory"`
+	Latitude         float64   `json:"Latitude"`
+	Longitude        float64   `json:"Longitude"`
+	Owner            string    `json:"Owner"`
+	Producer         string    `json:"Producer"`
+	SmallCategory    string    `json:"SmallCategory"`
+	Status           string    `json:"Status"`
+}*/
 
-type Solor struct {
-	Month          int
-	Hour int
-	Price float64
-}
+const (
+	earthRadius = 6378137.0
+	myLatitude         = "35.54738979492469" //0-89
+	myLongitude        = "139.67098316696772"
+	username           = "User1"
+	auctionEndMax      = 6
+	auctionEndInterval = 5
+	layout = "2006-01-02T15:04:00+09:00"
+)
 
-func UpdateSolorUnitPrice(contract *client.Contract) {
-	prices := []Solor{
-		{Month: 11, Hour: 0, Price: 0.01}, {Month: 11, Hour: 1, Price: 0.011}, {Month: 11, Hour: 2, Price: 0.012}, 
-		{Month: 11, Hour: 3, Price: 0.013}, {Month: 11, Hour: 4, Price: 0.014}, {Month: 11, Hour: 5, Price: 0.015}, 
-		{Month: 11, Hour: 6, Price: 0.016}, {Month: 11, Hour: 7, Price: 0.017}, {Month: 11, Hour: 8, Price: 0.018}, 
-		{Month: 11, Hour: 9, Price: 0.019}, {Month: 11, Hour: 10, Price: 0.02}, {Month: 11, Hour: 11, Price: 0.021}, 
-		{Month: 11, Hour: 13, Price: 0.022}, {Month: 11, Hour: 14, Price: 0.023}, {Month: 11, Hour: 15, Price: 0.02}, 
-		{Month: 11, Hour: 16, Price: 0.015}, {Month: 11, Hour: 17, Price: 0.015}, {Month: 11, Hour: 18, Price: 0.015}, 
-		{Month: 11, Hour: 19, Price: 0.01}, {Month: 11, Hour: 20, Price: 0.01}, {Month: 11, Hour: 21, Price: 0.01}, 
-		{Month: 11, Hour: 22, Price: 0.01}, {Month: 11, Hour: 23, Price: 0.01}, {Month: 11, Hour: 24, Price: 0.01},
+func Create(contract *client.Contract) (Energy, error) {
+	largeCategory := "Green"
+	smallCategory := "solor"
 
+	var timestamp = time.Now()
+	rand.Seed(time.Now().UnixNano())
+	// create id
+	id := timestamp.Format(layout) + username + "-" + strconv.Itoa(rand.Intn(10000))
 
-		{Month: 12, Hour: 0, Price: 0.01}, {Month: 12, Hour: 1, Price: 0.01}, {Month: 12, Hour: 2, Price: 0.01}, 
-		{Month: 12, Hour: 3, Price: 0.01}, {Month: 12, Hour: 4, Price: 0.01}, {Month: 12, Hour: 5, Price: 0.01}, 
-		{Month: 12, Hour: 6, Price: 0.01}, {Month: 12, Hour: 7, Price: 0.01}, {Month: 12, Hour: 8, Price: 0.01}, 
-		{Month: 12, Hour: 9, Price: 0.01}, {Month: 12, Hour: 10, Price: 0.01}, {Month: 12, Hour: 11, Price: 0.01}, 
-		{Month: 12, Hour: 13, Price: 0.01}, {Month: 12, Hour: 14, Price: 0.01}, {Month: 12, Hour: 15, Price: 0.01}, 
-		{Month: 12, Hour: 16, Price: 0.01}, {Month: 12, Hour: 17, Price: 0.01}, {Month: 12, Hour: 18, Price: 0.01}, 
-		{Month: 12, Hour: 19, Price: 0.01}, {Month: 12, Hour: 20, Price: 0.01}, {Month: 12, Hour: 21, Price: 0.01}, 
-		{Month: 12, Hour: 22, Price: 0.01}, {Month: 12, Hour: 23, Price: 0.01}, {Month: 12, Hour: 24, Price: 0.01},
+	//var energy Energy
+	// create token
+	energy, err := createToken(contract, id, timestamp, largeCategory, smallCategory)
+	if err != nil {
+		return energy, err
 	}
 
-	nowTime := time.Now()
-	fmt.Println(nowTime)
-	hour := nowTime.Hour()
-	fmt.Println(hour)
+	auction(contract, energy, timestamp)
+	return energy, nil
+	// go auction()
+	// Notification of errors?
+	// fmt.Println(energy)
 
-	fmt.Printf("year:%T, month:%T, date:%T, hour:%T\n", nowTime.Year(), nowTime.Month(), nowTime.Day(), nowTime.Hour())
+}
 
-	//next := time.Date(nowTime.Year(), nowTime.Month(), nowTime.Day(), nowTime.Hour() + 1, 0, 0, 0, time.Local)
-	next2 := time.Date(nowTime.Year(), nowTime.Month(), nowTime.Day(), nowTime.Hour(), 35, 0, 0, time.Local)
-	fmt.Println(next2)
-	
-	fmt.Println(next2.Sub(nowTime))
-	timer := time.NewTimer(next2.Sub(nowTime))
-	<-timer.C
-	fmt.Println("timer")
-	ticker := time.NewTicker(time.Minute * 1)
+func auction(contract *client.Contract, energy Energy, timestamp time.Time) {
+	ticker := time.NewTicker(time.Minute * auctionEndInterval)
+	count := 0
+
+	// Check for bidders every 5 minutes
+loop:
 	for {
-		<-ticker.C
-		nowTime = time.Now()
-		for _, price := range(prices){
-			if (price.Month == int(nowTime.Month()) && price.Hour == int(nowTime.Hour())) {
-				fmt.Println(price)
-				update(contract, "solor", price.Price)
+		select {
+		case <-ticker.C:
+			count++
+			fmt.Printf("count:%d\n", count)
+			auctionEndTimestamp := timestamp.Add(time.Minute * time.Duration(count*auctionEndInterval))
+			massage, err := auctionEnd(contract, energy.ID, auctionEndTimestamp)
+			if (err != nil) {
+				fmt.Println(err)
 			}
+			fmt.Printf("timestamp:%v, id:%s\n", auctionEndTimestamp, energy.ID)
+
+			stopmassage1 := "the energy " + energy.ID + " was generated more than 30min ago. This was not sold."
+			stopmassage2 := "the energy " + energy.ID + " was sold. It was generetad more than 30min ago."
+			stopmassage3 := "the energy " + energy.ID + " was sold"
+			if massage == stopmassage1 || massage == stopmassage2 || massage == stopmassage3 {
+				ticker.Stop()
+				break loop
+			} else if count == auctionEndMax - 1 {
+				// discount the auction between 25min and 30min
+				err = discountUnitPrice(contract, energy.ID)
+				fmt.Println("discount")
+			} else if count == auctionEndMax {
+				// last auction
+				ticker.Stop()
+				fmt.Println("final")
+				break loop
+			} 
 		}
 	}
-
+	// http post
+	resultEnergy, err := readToken(contract, energy.ID)
+	if (err != nil) {
+		fmt.Println(err)
+	} else {
+		fmt.Println(resultEnergy)
+	}
 }
 
-func update(contract *client.Contract, smallCategory string, unitPrice float64){
-	fmt.Printf("Submit Transaction: changeUnitPrice\n")
-	var timestamp = time.Now()
-	var layout = "2006-01-02T15:04:00Z"
+func createToken(contract *client.Contract, energyId string, timestamp time.Time, largeCAT string, smallCAT string) (Energy, error) {
+	fmt.Printf("Submit Transaction: CreateToken, creates new token with ID, Latitude, Longitude, Owner, Large Category, Small Category and timestamp \n")
 	var stringTimestamp = timestamp.Format(layout)
-
-
-	// smallCategory string, newUnitPrice float64, timestamp time.Time
-	_, err := contract.SubmitTransaction("UpdateUnitPrice", smallCategory, unitPrice, stringTimestamp)
+	var energy Energy
+	_, err := contract.SubmitTransaction("CreateToken", energyId, myLatitude, myLongitude, username, largeCAT, smallCAT, stringTimestamp)
 	if err != nil {
-		panic(fmt.Errorf("failed to submit transaction: %w", err))
+		return energy, err
 	}
 
 	fmt.Printf("*** Transaction committed successfully\n")
 
+	energy, err = readToken(contract, energyId)
+	if err != nil {
+		return energy, err
+	}
+
+	return energy, nil
 }
 
+func discountUnitPrice(contract *client.Contract, energyId string) error {
 
+	_, err := contract.SubmitTransaction("DiscountUnitPrice", energyId)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func auctionEnd(contract *client.Contract, energyId string, timestamp time.Time) (string, error) {
+	fmt.Printf("Evaluate Transaction: auctionEnd\n")
+	var stringTimestamp = timestamp.Format(layout)
+	fmt.Println(energyId)
+	fmt.Println(username)
+	fmt.Println(stringTimestamp)
+	evaluateResult, err := contract.SubmitTransaction("AuctionEnd", energyId, username, stringTimestamp)
+	if err != nil {
+		return "", err
+	}
+	massage := string(evaluateResult)
+
+	fmt.Printf("*** Result:%s\n", massage)
+	return massage, nil
+}
+
+func readToken(contract *client.Contract, energyId string) (Energy, error) {
+	fmt.Printf("Async Submit Transaction: ReadToken\n")
+	var energy Energy
+	evaluateResult, err := contract.EvaluateTransaction("ReadToken", energyId)
+	if err != nil {
+		return energy, err
+	}
+	
+	err = json.Unmarshal(evaluateResult, &energy)
+	if(err != nil) {
+		return energy, err
+	}
+
+	return energy, nil
+}
+
+/*
 // This type of transaction would typically only be run once by an application the first time it was started after its
 // initial deployment. A new version of the chaincode deployed later would likely not need to run an "init" function.
 func InitLedger(contract *client.Contract) {
@@ -122,8 +204,9 @@ func GetAllTokens(contract *client.Contract) {
 	result := formatJSON(evaluateResult)
 
 	fmt.Printf("*** Result:%s\n", result)
-}
+}*/
 
+/*
 // Submit a transaction synchronously, blocking until it has been committed to the ledger.
 func CreateToken(contract *client.Contract) {
 	fmt.Printf("Submit Transaction: CreateToken, creates new token with ID, Latitude, Longitude, Owner, Large Category, Small Category and timestamp \n")
@@ -138,8 +221,8 @@ func CreateToken(contract *client.Contract) {
 	//result :=  formatJSON(jsonResult)
 	fmt.Printf("%s\n", result)
 	fmt.Printf("*** Transaction committed successfully\n")
-}
-
+}*/
+/*
 // Evaluate a transaction by assetID to query ledger state.
 func BidOnToken(contract *client.Contract) {
 	fmt.Printf("Evaluate Transaction: BidOnToken, function returns asset attributes\n")
@@ -153,8 +236,8 @@ func BidOnToken(contract *client.Contract) {
 	//result := formatJSON(evaluateResult)
 
 	fmt.Printf("*** Result:%s\n", evaluateResult)
-}
-
+}*/
+/*
 func AuctionEnd(contract *client.Contract) {
 	fmt.Printf("Evaluate Transaction: BidOnToken, function returns asset attributes\n")
 	var timestamp = time.Now()
@@ -167,10 +250,11 @@ func AuctionEnd(contract *client.Contract) {
 	//result := formatJSON(evaluateResult)
 
 	fmt.Printf("*** Result:%s\n", evaluateResult)
-}
+}*/
 
 // Submit transaction asynchronously, blocking until the transaction has been sent to the orderer, and allowing
 // this thread to process the chaincode response (e.g. update a UI) without waiting for the commit notification
+/*
 func QueryByStatus(contract *client.Contract) {
 	fmt.Printf("Async Submit Transaction: QueryByStatus'\n")
 
@@ -182,7 +266,8 @@ func QueryByStatus(contract *client.Contract) {
 
 	fmt.Printf("*** Result:%s\n", result)
 }
-
+*/
+/*
 func QueryByLocationRange(contract *client.Contract) {
 	fmt.Printf("Async Submit Transaction: QueryByLocationRange'\n")
 
@@ -193,8 +278,9 @@ func QueryByLocationRange(contract *client.Contract) {
 	result := formatJSON(evaluateResult)
 
 	fmt.Printf("*** Result:%s\n", result)
-}
+}*/
 
+/*
 func ReadToken(contract *client.Contract) {
 	fmt.Printf("Async Submit Transaction: ReadToken, updates existing asset owner'\n")
 
@@ -205,10 +291,10 @@ func ReadToken(contract *client.Contract) {
 	result := formatJSON(evaluateResult)
 
 	fmt.Printf("*** Result:%s\n", result)
-}
+}*/
 
 // Submit transaction, passing in the wrong number of arguments ,expected to throw an error containing details of any error responses from the smart contract.
-func ExampleErrorHandling(contract *client.Contract) {
+/*func ExampleErrorHandling(contract *client.Contract) {
 	fmt.Println("Submit Transaction: UpdateAsset asset70, asset70 does not exist and should return an error")
 
 	_, err := contract.SubmitTransaction("UpdateAsset", "energy4")
@@ -239,7 +325,8 @@ func ExampleErrorHandling(contract *client.Contract) {
 		}
 	}
 }
-
+*/
+/*
 // Format JSON data
 func formatJSON(data []byte) string {
 	var prettyJSON bytes.Buffer
@@ -248,3 +335,4 @@ func formatJSON(data []byte) string {
 	}
 	return prettyJSON.String()
 }
+*/

@@ -48,27 +48,27 @@ type Energy struct {
 
 const (
 	earthRadius = 6378137.0
-	// requestedTokenNum int = 10
-	// batteryLife = 10 //%
+	requestedTokenNum int = 10
+	batteryLife = 10 //%
 	pricePerMater = 0.01
-	// myLatitude = 35.5552824466371 //0から89まで
-	// myLongitude = 139.65527497388206
-	// username = "user2"
+	searchRange = (100 - batteryLife) * 0.1 * 1000 // 9km * 1000m
+	myLatitude = 35.5552824466371 //0から89まで
+	myLongitude = 139.65527497388206
+	username = "user2"
 	layout = "2006-01-02T15:04:00+09:00"
 )
+
+var tokenNum int = requestedTokenNum
 
 func Start(contract *client.Contract) {
 
 }
 
-func Buy(contract *client.Contract, input Input) {
+func Buy(contract *client.Contract) {
 	// batteryLifeから検索範囲決定
-	searchRange := (100 - input.BatteryLife) * 0.1 * 1000 // 9km * 1000m
 	fmt.Printf("searchRange:%g\n", searchRange)
 
-	var tokenNum int = input.Token
-
-	lowerLat, upperLat, lowerLng, upperLng := determineRange(searchRange, input.Latitude, input.Longitude)
+	lowerLat, upperLat, lowerLng, upperLng := determineRange(searchRange)
 	energies := queryByLocationRange(contract, lowerLat, upperLat, lowerLng, upperLng)
 	
 	// fmt.Println(energies)
@@ -80,7 +80,7 @@ func Buy(contract *client.Contract, input Input) {
 	validEnergies := []Energy{}
 
 	for _, energy := range energies {
-		distance := distance(input.Latitude, input.Longitude, energy.Latitude, energy.Longitude)
+		distance := distance(myLatitude, myLongitude, energy.Latitude, energy.Longitude)
 		if distance <= searchRange && auctionStartTimeCompare.After(energy.AuctionStartTime) == false {
 			energy.BidPrice = energy.UnitPrice + distance * pricePerMater
 			validEnergies = append(validEnergies, energy)
@@ -118,7 +118,7 @@ func Buy(contract *client.Contract, input Input) {
 		}
 		fmt.Printf("max:%d\n", bidNum)
 
-		tempSuccess := bid(contract, validEnergies, bidNum, input.User)
+		tempSuccess := bid(contract, validEnergies, bidNum)
 
 		/*for _, energy := range tempSuccess {
 			success = append(success, energy)
@@ -144,7 +144,7 @@ func Buy(contract *client.Contract, input Input) {
 			timer := time.NewTimer(auctionEndTime.Sub(nowTime))
 			<-timer.C
 			auctionEndToken := readToken(contract, success[i].ID)
-			if (auctionEndToken.Owner == input.User) {
+			if (auctionEndToken.Owner == username) {
 				// notice?
 				fmt.Println("you are a winner.")
 			} else {
@@ -178,13 +178,13 @@ func readToken(contract *client.Contract, energyId string) Energy {
 	//fmt.Printf("*** Result:%s\n", result)
 }
 
-func bid(contract *client.Contract, energies []Energy, bidNum int, username string) ([]Energy) {
+func bid(contract *client.Contract, energies []Energy, bidNum int) []Energy {
 	successEnergy := []Energy{}
 	//leftEnergy := energies
 	for i := 0; i < bidNum; i++ {
 		fmt.Printf("id:%s, auctionStartTime:%s\n",
 		energies[i].ID, energies[i].AuctionStartTime.Format(layout))
-		massage := bidOnToken(contract, energies[i].ID, energies[i].BidPrice, username)
+		massage := bidOnToken(contract, energies[i].ID, energies[i].BidPrice)
 		fmt.Println(massage)
 		if (massage == "your bid was successful") {
 			successEnergy = append(successEnergy, energies[i])
@@ -194,7 +194,7 @@ func bid(contract *client.Contract, energies []Energy, bidNum int, username stri
 	return successEnergy
 }
 
-func bidOnToken(contract *client.Contract, energyId string, bidPrice float64, username string) (string) {
+func bidOnToken(contract *client.Contract, energyId string, bidPrice float64) (string) {
 	//fmt.Printf("Evaluate Transaction: BidOnToken, function returns asset attributes\n")
 	var timestamp = time.Now()
 	var stringTimestamp = timestamp.Format(layout)
@@ -211,7 +211,7 @@ func bidOnToken(contract *client.Contract, energyId string, bidPrice float64, us
 }
 
 
-func determineRange(length float64, myLatitude float64, myLongitude float64) (lowerLat float64, upperLat float64, lowerLng float64, upperLng float64) {
+func determineRange(length float64) (lowerLat float64, upperLat float64, lowerLng float64, upperLng float64) {
 	// 緯度固定で経度求める
 	rlat := myLatitude * math.Pi / 180
 	r := length / earthRadius
@@ -335,7 +335,7 @@ func CreateToken(contract *client.Contract) {
 	fmt.Printf("%s\n", result)
 	fmt.Printf("*** Transaction committed successfully\n")
 }*/
-/*
+
 // Evaluate a transaction by assetID to query ledger state.
 func BidOnToken(contract *client.Contract) {
 	fmt.Printf("Evaluate Transaction: BidOnToken, function returns asset attributes\n")
@@ -349,7 +349,7 @@ func BidOnToken(contract *client.Contract) {
 	//result := formatJSON(evaluateResult)
 
 	fmt.Printf("*** Result:%s\n", evaluateResult)
-}*/
+}
 /*
 func AuctionEnd(contract *client.Contract) {
 	fmt.Printf("Evaluate Transaction: BidOnToken, function returns asset attributes\n")

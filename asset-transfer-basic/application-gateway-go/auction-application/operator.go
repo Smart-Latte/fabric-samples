@@ -15,9 +15,6 @@ import (
 	"log"
 	"path"
 	"time"
-	"net/http"
-	"encoding/json"
-	"bytes"
 
 	"github.com/hyperledger/fabric-gateway/pkg/client"
 	"github.com/hyperledger/fabric-gateway/pkg/identity"
@@ -37,129 +34,68 @@ const (
 	chaincodeName = "basic"
 )
 
-type Input struct {
-	Latitude         float64   `json:"Latitude"`
-	Longitude        float64   `json:"Longitude"`
-	User            string    `json:"User"`
-}
-
 var now = time.Now()
 
 func main() {
 	log.Println("============ application-golang starts ============")
-	http.HandleFunc("/createToken", handler)
-	http.ListenAndServe(":8080", nil)
+
+	// The gRPC client connection should be shared by all Gateway connections to this endpoint
+	clientConnection := newGrpcConnection()
+	defer clientConnection.Close()
+
+	id := newIdentity()
+	sign := newSign()
+
+	// Create a Gateway connection for a specific client identity
+	gateway, err := client.Connect(
+		id,
+		client.WithSign(sign),
+		client.WithClientConnection(clientConnection),
+		// Default timeouts for different gRPC calls
+		client.WithEvaluateTimeout(5*time.Second),
+		client.WithEndorseTimeout(15*time.Second),
+		client.WithSubmitTimeout(5*time.Second),
+		client.WithCommitStatusTimeout(1*time.Minute),
+	)
+	if err != nil {
+		panic(err)
+	}
+	defer gateway.Close()
+
+	network := gateway.GetNetwork(channelName)
+	contract := network.GetContract(chaincodeName)
+
+	fmt.Println("initLedger:")
+	InitLedger(contract)
+
+	fmt.Println("updateSolorUnitPrice:")
+	UpdateSolorUnitPrice(contract)
+
+	// fmt.Println("getAllTokens:")
+	// GetAllTokens(contract)
+
+	// fmt.Println("createToken:")
+	// CreateToken(contract)
+
+	// fmt.Println("BitOnToken:")
+	// BidOnToken(contract)
+
+	// fmt.Println("AuctionEnd:")
+	// AuctionEnd(contract)
+
+	// fmt.Println("ReadToken:")
+	// ReadToken(contract)
+
+	// fmt.Println("QueryByStatus:")
+	// QueryByStatus(contract)
+
+	// fmt.Println("QueryByLocationRange:")
+	// QueryByLocationRange(contract)
+
+	// fmt.Println("exampleErrorHandling:")
+	// ExampleErrorHandling(contract)
+
 	log.Println("============ application-golang ends ============")
-}
-
-func handler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed) //405
-		w.Write([]byte("Only POST"))
-		return
-	}
-	if r.Header.Get("Content-Type") != "application/json" {
-		w.WriteHeader(http.StatusBadRequest) //400
-		w.Write([]byte("Only json"))
-	}
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest) //400
-		w.Write([]byte(err.Error()))
-	}
-	var requestInput Input
-	err = json.Unmarshal(body, &requestInput)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError) //500
-		w.Write([]byte(err.Error()))
-	}
-	createEnergy, timestamp, err := createContract(requestInput)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-	}
-
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	if err = enc.Encode(&createEnergy); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-	}
-	w.Write([]byte(buf.String()))
-
-	go auctionContract(createEnergy, timestamp, requestInput)
-
-}
-
-func createContract(input Input) (Energy, time.Time, error) {
-	//log.Println("============ application-golang starts ============")
-
-	// The gRPC client connection should be shared by all Gateway connections to this endpoint
-	clientConnection := newGrpcConnection()
-	defer clientConnection.Close()
-
-	id := newIdentity()
-	sign := newSign()
-
-	// Create a Gateway connection for a specific client identity
-	gateway, err := client.Connect(
-		id,
-		client.WithSign(sign),
-		client.WithClientConnection(clientConnection),
-		// Default timeouts for different gRPC calls
-		client.WithEvaluateTimeout(5*time.Second),
-		client.WithEndorseTimeout(15*time.Second),
-		client.WithSubmitTimeout(5*time.Second),
-		client.WithCommitStatusTimeout(1*time.Minute),
-	)
-	if err != nil {
-		panic(err)
-	}
-	defer gateway.Close()
-
-	network := gateway.GetNetwork(channelName)
-	contract := network.GetContract(chaincodeName)
-
-	fmt.Println("Create:")
-	energy, timestamp, err := Create(contract, input)
-	
-	return energy, timestamp, err
-	//fmt.Println(energy)
-
-}
-
-func auctionContract(energy Energy, timestamp time.Time, input Input) {
-	//log.Println("============ application-golang starts ============")
-
-	// The gRPC client connection should be shared by all Gateway connections to this endpoint
-	clientConnection := newGrpcConnection()
-	defer clientConnection.Close()
-
-	id := newIdentity()
-	sign := newSign()
-
-	// Create a Gateway connection for a specific client identity
-	gateway, err := client.Connect(
-		id,
-		client.WithSign(sign),
-		client.WithClientConnection(clientConnection),
-		// Default timeouts for different gRPC calls
-		client.WithEvaluateTimeout(5*time.Second),
-		client.WithEndorseTimeout(15*time.Second),
-		client.WithSubmitTimeout(5*time.Second),
-		client.WithCommitStatusTimeout(1*time.Minute),
-	)
-	if err != nil {
-		panic(err)
-	}
-	defer gateway.Close()
-
-	network := gateway.GetNetwork(channelName)
-	contract := network.GetContract(chaincodeName)
-
-	fmt.Println("Auction:")
-	Auction(contract, energy, timestamp, input)
-
 }
 
 // newGrpcConnection creates a gRPC connection to the Gateway server.

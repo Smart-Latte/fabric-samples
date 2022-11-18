@@ -87,17 +87,21 @@ func (s *SmartContract) UpdateUnitPrice(ctx contractapi.TransactionContextInterf
 			return err
 		}
 		cost.UnitPrice = newUnitPrice
-		cost.GenereatedTime = timestamp
+		cost.GeneratedTime = timestamp
 
 		costJSON, err := json.Marshal(cost)
 			if err != nil {
 				return err
 			}
 
-		return ctx.GetStub().PutState(id, costJSON)
+		err = ctx.GetStub().PutState(id, costJSON)
+		if err != nil {
+			return "", fmt.Errorf("failed to put to world state. %v", err)
+		}
+		return cost
 }
 
-func (s *SmartContract) DiscountUnitPrice(ctx contractapi.TransactionContextInterface, id string) error {
+func (s *SmartContract) DiscountUnitPrice(ctx contractapi.TransactionContextInterface, id string) (Energy, error) {
 		energy, err := s.ReadToken(ctx, id)
 		if err != nil {
 			return err

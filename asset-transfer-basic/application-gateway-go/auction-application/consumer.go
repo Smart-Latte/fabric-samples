@@ -34,9 +34,28 @@ const (
 	chaincodeName = "basic"
 )
 
+type Input struct {
+	Token int `json:"Token"`
+	BatteryLife float64 `json:"BatteryLife"`
+	Latitude         float64   `json:"Latitude"`
+	Longitude        float64   `json:"Longitude"`
+	User            string    `json:"User"`
+}
+
 var now = time.Now()
 
 func main() {
+	var input Input
+	input.Token = 10
+	input.BatteryLife = 10
+	input.Latitude = 35.5552824466371
+	input.Longitude = 139.65527497388206
+	input.User = "User2"
+
+	bidContract(input)
+}
+
+func bidContract(input Input) {
 	log.Println("============ application-golang starts ============")
 
 	// The gRPC client connection should be shared by all Gateway connections to this endpoint
@@ -69,7 +88,7 @@ func main() {
 	InitLedger(contract)
 
 	//fmt.Println("Buy:")
-	Buy(contract)
+	Buy(contract, input)
 
 	// fmt.Println("getAllTokens:")
 	// GetAllTokens(contract)

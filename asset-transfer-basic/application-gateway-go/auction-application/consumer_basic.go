@@ -23,13 +23,13 @@ import (
 )
 
 const (
-	mspID         = "Org1MSP"
-	cryptoPath    = "../../test-network/organizations/peerOrganizations/org1.example.com"
-	certPath      = cryptoPath + "/users/User1@org1.example.com/msp/signcerts/cert.pem"
-	keyPath       = cryptoPath + "/users/User1@org1.example.com/msp/keystore/"
-	tlsCertPath   = cryptoPath + "/peers/peer0.org1.example.com/tls/ca.crt"
-	peerEndpoint  = "localhost:7051"
-	gatewayPeer   = "peer0.org1.example.com"
+	mspID         = "Org2MSP"
+	cryptoPath    = "../../../test-network/organizations/peerOrganizations/org2.example.com"
+	certPath      = cryptoPath + "/users/User1@org2.example.com/msp/signcerts/cert.pem"
+	keyPath       = cryptoPath + "/users/User1@org2.example.com/msp/keystore/"
+	tlsCertPath   = cryptoPath + "/peers/peer0.org2.example.com/tls/ca.crt"
+	peerEndpoint  = "localhost:9051"
+	gatewayPeer   = "peer0.org2.example.com"
 	channelName   = "mychannel"
 	chaincodeName = "basic"
 )
@@ -68,6 +68,9 @@ func main() {
 	fmt.Println("initLedger:")
 	InitLedger(contract)
 
+	//fmt.Println("Buy:")
+	Buy(contract)
+
 	// fmt.Println("getAllTokens:")
 	// GetAllTokens(contract)
 
@@ -75,7 +78,7 @@ func main() {
 	// CreateToken(contract)
 
 	// fmt.Println("BitOnToken:")
-	// BidOnToken(contract)
+	//BidOnToken(contract)
 
 	// fmt.Println("AuctionEnd:")
 	// AuctionEnd(contract)
@@ -87,10 +90,10 @@ func main() {
 	// QueryByStatus(contract)
 
 	// fmt.Println("QueryByLocationRange:")
-	// QueryByLocationRange(contract)
+	//QueryByLocationRange(contract)
 
-	// fmt.Println("exampleErrorHandling:")
-	// ExampleErrorHandling(contract)
+	//fmt.Println("exampleErrorHandling:")
+	//ExampleErrorHandling(contract)
 
 	log.Println("============ application-golang ends ============")
 }
