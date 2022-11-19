@@ -17,6 +17,8 @@ import (
 	"time"
 	"math/rand"
 	"strconv"
+	"net/http"
+	"bytes"
 
 	"github.com/hyperledger/fabric-gateway/pkg/client"
 	//"github.com/hyperledger/fabric-protos-go-apiv2/gateway"
@@ -47,7 +49,7 @@ const (
 	//username           = "User1"
 	auctionEndMax      = 6
 	auctionEndInterval = 5
-	layout = "2006-01-02T15:04:00+09:00"
+	layout = "2006-01-02T15:04:05+09:00"
 )
 
 func Create(contract *client.Contract, input Input) (Energy, time.Time, error) {
@@ -114,8 +116,8 @@ loop:
 		fmt.Println(err)
 	} else {
 		fmt.Println(resultEnergy)
+		httpPostAuctionEnd(resultEnergy)
 	}
-	//return resultEnergy, nil
 }
 
 func createToken(contract *client.Contract, energyId string, timestamp time.Time, largeCAT string, smallCAT string, input Input) (Energy, error) {
@@ -178,6 +180,40 @@ func readToken(contract *client.Contract, energyId string) (Energy, error) {
 	}
 
 	return energy, nil
+}
+
+func HttpPostCreatedToken(energy Energy) {
+	const URL = "https://webhook.site/72017270-cae9-4322-a80c-fd833c85ebf0"
+
+	energyJson, err := json.Marshal(energy)
+	if err != nil {
+		fmt.Println(err)
+	}
+	res, err2 := http.Post(URL, "application/json", bytes.NewBuffer(energyJson))
+	defer res.Body.Close()
+
+	if err2 != nil {
+		fmt.Println(err2)
+	} else {
+		fmt.Println(res.Status)
+	}
+}
+
+func httpPostAuctionEnd(energy Energy) {
+	const URL = "https://webhook.site/72017270-cae9-4322-a80c-fd833c85ebf0"
+
+	energyJson, err := json.Marshal(energy)
+	if err != nil {
+		fmt.Println(err)
+	}
+	res, err2 := http.Post(URL, "application/json", bytes.NewBuffer(energyJson))
+	defer res.Body.Close()
+
+	if err2 != nil {
+		fmt.Println(err2)
+	} else {
+		fmt.Println(res.Status)
+	}
 }
 
 /*

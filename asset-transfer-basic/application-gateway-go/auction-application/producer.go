@@ -61,22 +61,26 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Content-Type") != "application/json" {
 		w.WriteHeader(http.StatusBadRequest) //400
 		w.Write([]byte("Only json"))
+		return
 	}
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest) //400
 		w.Write([]byte(err.Error()))
+		return
 	}
 	var requestInput Input
 	err = json.Unmarshal(body, &requestInput)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError) //500
 		w.Write([]byte(err.Error()))
+		return
 	}
 	createEnergy, timestamp, err := createContract(requestInput)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
+		return
 	}
 
 	var buf bytes.Buffer
@@ -84,15 +88,19 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if err = enc.Encode(&createEnergy); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
+		return
 	}
 	w.Write([]byte(buf.String()))
+
+	go HttpPostCreatedToken(createEnergy)
 
 	go auctionContract(createEnergy, timestamp, requestInput)
 
 }
 
 func createContract(input Input) (Energy, time.Time, error) {
-	//log.Println("============ application-golang starts ============")
+	var energy Energy
+	var timestamp time.Time
 
 	// The gRPC client connection should be shared by all Gateway connections to this endpoint
 	clientConnection := newGrpcConnection()
@@ -113,7 +121,7 @@ func createContract(input Input) (Energy, time.Time, error) {
 		client.WithCommitStatusTimeout(1*time.Minute),
 	)
 	if err != nil {
-		panic(err)
+		return energy, timestamp, err
 	}
 	defer gateway.Close()
 
@@ -121,7 +129,7 @@ func createContract(input Input) (Energy, time.Time, error) {
 	contract := network.GetContract(chaincodeName)
 
 	fmt.Println("Create:")
-	energy, timestamp, err := Create(contract, input)
+	energy, timestamp, err = Create(contract, input)
 	
 	return energy, timestamp, err
 	//fmt.Println(energy)

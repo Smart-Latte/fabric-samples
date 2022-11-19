@@ -20,6 +20,7 @@ import (
 	"math"
 	"sort"
 	"sync"
+	"net/http"
 	
 	"github.com/hyperledger/fabric-gateway/pkg/client"
 	"github.com/hyperledger/fabric-protos-go-apiv2/gateway"
@@ -43,7 +44,7 @@ type Energy struct {
 	Producer         string    `json:"Producer"`
 	SmallCategory    string    `json:"SmallCategory"`
 	Status           string    `json:"Status"`
-	MyBidStatus		 string    `json:"My Bid Status"`
+	//MyBidStatus		 string    `json:"My Bid Status"`
 }
 
 const (
@@ -54,14 +55,10 @@ const (
 	// myLatitude = 35.5552824466371 //0から89まで
 	// myLongitude = 139.65527497388206
 	// username = "user2"
-	layout = "2006-01-02T15:04:00+09:00"
+	layout = "2006-01-02T15:04:05+09:00"
 )
 
-func Start(contract *client.Contract) {
-
-}
-
-func Buy(contract *client.Contract, input Input) {
+func Buy(contract *client.Contract, input Input) []Energy {
 	// batteryLifeから検索範囲決定
 	searchRange := (100 - input.BatteryLife) * 0.1 * 1000 // 9km * 1000m
 	fmt.Printf("searchRange:%g\n", searchRange)
@@ -81,7 +78,7 @@ func Buy(contract *client.Contract, input Input) {
 
 	for _, energy := range energies {
 		distance := distance(input.Latitude, input.Longitude, energy.Latitude, energy.Longitude)
-		if distance <= searchRange && auctionStartTimeCompare.After(energy.AuctionStartTime) == false {
+		if energy.Owner != input.User && distance <= searchRange && auctionStartTimeCompare.After(energy.AuctionStartTime) == false {
 			energy.BidPrice = energy.UnitPrice + distance * pricePerMater
 			validEnergies = append(validEnergies, energy)
 			fmt.Println("it's valid")
@@ -120,16 +117,18 @@ func Buy(contract *client.Contract, input Input) {
 
 		tempSuccess := bid(contract, validEnergies, bidNum, input.User)
 
-		/*for _, energy := range tempSuccess {
-			success = append(success, energy)
-		}*/
 		success = append(success, tempSuccess...)
-		// println(success)
-		// tempの長さ分、validEnergyから引く
 		validEnergies = validEnergies[bidNum:]
 		tokenNum -= len(tempSuccess)
 	}
 
+	return success
+	
+}
+
+func BidResult(contract *client.Contract, success []Energy, input Input) { 
+
+	// input:success List, input
 	var wg sync.WaitGroup
 	wg.Add(len(success))
 	for i := 0; i < len(success) ; i++ {
@@ -154,7 +153,23 @@ func Buy(contract *client.Contract, input Input) {
 	}
 
 	wg.Wait()
-	
+}
+
+func HttpPostBidToken(energies []Energy) {
+	const URL = "https://webhook.site/72017270-cae9-4322-a80c-fd833c85ebf0"
+
+	energiesJson, err := json.Marshal(energies)
+	if err != nil {
+		fmt.Println(err)
+	}
+	res, err2 := http.Post(URL, "application/json", bytes.NewBuffer(energiesJson))
+	defer res.Body.Close()
+
+	if err2 != nil {
+		fmt.Println(err2)
+	} else {
+		fmt.Println(res.Status)
+	}
 }
 
 func readToken(contract *client.Contract, energyId string) Energy {
@@ -181,16 +196,45 @@ func readToken(contract *client.Contract, energyId string) Energy {
 func bid(contract *client.Contract, energies []Energy, bidNum int, username string) ([]Energy) {
 	successEnergy := []Energy{}
 	//leftEnergy := energies
+	
+	c := make(chan Energy)
+
 	for i := 0; i < bidNum; i++ {
-		fmt.Printf("id:%s, auctionStartTime:%s\n",
-		energies[i].ID, energies[i].AuctionStartTime.Format(layout))
+
+		go func(i int, c chan Energy){
+			fmt.Printf("id:%s, auctionStartTime:%s\n", energies[i].ID, energies[i].AuctionStartTime.Format(layout))
+			massage := bidOnToken(contract, energies[i].ID, energies[i].BidPrice, username)
+			fmt.Println(massage)
+			//c <- massage
+			if (massage == "your bid was successful") {
+				bidResult := readToken(contract, energies[i].ID)
+				c <- bidResult
+				// successEnergy = append(successEnergy, bidResult)
+			// auctionstart + 5min 経ったら見に行く
+			} else {
+				c <- energies[i]
+			}
+		}(i, c)
+		
+		/*fmt.Printf("id:%s, auctionStartTime:%s\n", energies[i].ID, energies[i].AuctionStartTime.Format(layout))
+
 		massage := bidOnToken(contract, energies[i].ID, energies[i].BidPrice, username)
 		fmt.Println(massage)
 		if (massage == "your bid was successful") {
-			successEnergy = append(successEnergy, energies[i])
+			bidResult := readToken(contract, energies[i].ID)
+			successEnergy = append(successEnergy, bidResult)
 			// auctionstart + 5min 経ったら見に行く
+		}*/
+
+	}
+
+	for i := 0; i < bidNum; i++ {
+		energy := <-c
+		if (energy.Owner == username) {
+			successEnergy = append(successEnergy, energy)
 		}
 	}
+
 	return successEnergy
 }
 
