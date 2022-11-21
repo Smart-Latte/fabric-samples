@@ -9,85 +9,74 @@ SPDX-License-Identifier: Apache-2.0
 package main
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"errors"
+	//"bytes"
+	//"context"
+	//"encoding/json"
+	//"errors"
 	"fmt"
 	"time"
 	"strconv"
 
 	"github.com/hyperledger/fabric-gateway/pkg/client"
-	"github.com/hyperledger/fabric-protos-go-apiv2/gateway"
-	"google.golang.org/grpc/status"
+	//"github.com/hyperledger/fabric-protos-go-apiv2/gateway"
+	//"google.golang.org/grpc/status"
 )
 
 // var assetId = fmt.Sprintf("energy%d", now.Unix()*1e3+int64(now.Nanosecond())/1e6)
 
 type Solor struct {
-	Month          int
+	Month  int
 	Hour int
 	Price float64
 }
 
+const (
+	totalDataNumber = 12
+	hoursAdayHas = 24
+)
+
 func UpdateSolorUnitPrice(contract *client.Contract) {
-	prices := []Solor{
-		{Month: 11, Hour: 0, Price: 0.01}, {Month: 11, Hour: 1, Price: 0.011}, {Month: 11, Hour: 2, Price: 0.012}, 
-		{Month: 11, Hour: 3, Price: 0.013}, {Month: 11, Hour: 4, Price: 0.014}, {Month: 11, Hour: 5, Price: 0.015}, 
-		{Month: 11, Hour: 6, Price: 0.016}, {Month: 11, Hour: 7, Price: 0.017}, {Month: 11, Hour: 8, Price: 0.018}, 
-		{Month: 11, Hour: 9, Price: 0.019}, {Month: 11, Hour: 10, Price: 0.02}, {Month: 11, Hour: 11, Price: 0.021}, 
-		{Month: 11, Hour: 13, Price: 0.022}, {Month: 11, Hour: 14, Price: 0.023}, {Month: 11, Hour: 15, Price: 0.02}, 
-		{Month: 11, Hour: 16, Price: 0.015}, {Month: 11, Hour: 17, Price: 0.015}, {Month: 11, Hour: 18, Price: 0.015}, 
-		{Month: 11, Hour: 19, Price: 0.01}, {Month: 11, Hour: 20, Price: 0.01}, {Month: 11, Hour: 21, Price: 0.01}, 
-		{Month: 11, Hour: 22, Price: 0.01}, {Month: 11, Hour: 23, Price: 0.01}, {Month: 11, Hour: 24, Price: 0.01},
 
-
-		{Month: 12, Hour: 0, Price: 0.01}, {Month: 12, Hour: 1, Price: 0.01}, {Month: 12, Hour: 2, Price: 0.01}, 
-		{Month: 12, Hour: 3, Price: 0.01}, {Month: 12, Hour: 4, Price: 0.01}, {Month: 12, Hour: 5, Price: 0.01}, 
-		{Month: 12, Hour: 6, Price: 0.01}, {Month: 12, Hour: 7, Price: 0.01}, {Month: 12, Hour: 8, Price: 0.01}, 
-		{Month: 12, Hour: 9, Price: 0.01}, {Month: 12, Hour: 10, Price: 0.01}, {Month: 12, Hour: 11, Price: 0.01}, 
-		{Month: 12, Hour: 13, Price: 0.01}, {Month: 12, Hour: 14, Price: 0.01}, {Month: 12, Hour: 15, Price: 0.01}, 
-		{Month: 12, Hour: 16, Price: 0.01}, {Month: 12, Hour: 17, Price: 0.01}, {Month: 12, Hour: 18, Price: 0.01}, 
-		{Month: 12, Hour: 19, Price: 0.01}, {Month: 12, Hour: 20, Price: 0.01}, {Month: 12, Hour: 21, Price: 0.01}, 
-		{Month: 12, Hour: 22, Price: 0.01}, {Month: 12, Hour: 23, Price: 0.01}, {Month: 12, Hour: 24, Price: 0.01},
-	}
+	priceList := price()
 
 	nowTime := time.Now()
-	fmt.Println(nowTime)
-	hour := nowTime.Hour()
-	fmt.Println(hour)
-
-	fmt.Printf("year:%T, month:%T, date:%T, hour:%T\n", nowTime.Year(), nowTime.Month(), nowTime.Day(), nowTime.Hour())
+	updateSolor(contract, priceList)
 
 	next := time.Date(nowTime.Year(), nowTime.Month(), nowTime.Day(), nowTime.Hour() + 1, 0, 0, 0, time.Local)
-	//next2 := time.Date(nowTime.Year(), nowTime.Month(), nowTime.Day(), nowTime.Hour() + 1, 0, 0, 0, time.Local)
-	fmt.Println(next)
-	
 	fmt.Println(next.Sub(nowTime))
 	timer := time.NewTimer(next.Sub(nowTime))
 	<-timer.C
-	fmt.Println("timer")
+	updateSolor(contract, priceList)
 	
 	ticker := time.NewTicker(time.Hour * 1)
 	for {
 		<-ticker.C
-		nowTime = time.Now()
-		for _, price := range(prices){
-			if (price.Month == int(nowTime.Month()) && price.Hour == int(nowTime.Hour())) {
-				fmt.Println(price)
-				update(contract, "solor", price.Price)
-			}
-		}
+		updateSolor(contract, priceList)
 	}
 
 }
 
+func updateSolor(contract *client.Contract, priceList [totalDataNumber][hoursAdayHas]float64) {
+	nowTime := time.Now()
+	month := int(nowTime.Month())
+	hour := int(nowTime.Hour())
+		
+	//month: 1-12, hour:0-23
+	price := priceList[month - 1][hour]
+	fmt.Printf("month:%d, hour:%d, price:%g\n", month, hour, price)
+	update(contract, "solor", price)
+}
+
 func update(contract *client.Contract, smallCategory string, unitPrice float64){
+
 	fmt.Printf("Submit Transaction: changeUnitPrice\n")
 	var timestamp = time.Now()
-	var layout = "2006-01-02T15:04:00Z"
+	var layout = "2006-01-02T15:04:05+09:00"
 	var stringTimestamp = timestamp.Format(layout)
 	var stringUnitPrice = strconv.FormatFloat(unitPrice, 'f', -1, 64)
+	fmt.Println(smallCategory)
+	fmt.Println(stringUnitPrice)
+	fmt.Println(stringTimestamp)
 
 
 	// smallCategory string, newUnitPrice float64, timestamp time.Time
@@ -100,6 +89,85 @@ func update(contract *client.Contract, smallCategory string, unitPrice float64){
 
 }
 
+func price() [totalDataNumber][hoursAdayHas]float64 {
+	maxPrice := 0.025
+	minPrice := 0.015
+
+	temperatureData := [totalDataNumber][hoursAdayHas]float64{
+		{51, 50, 49, 45, 48, 52, 57, 74, 96, 120, 135, 137, 143, 146, 139, 129, 115, 106, 99, 88, 90, 87, 84, 79}, 
+		{0, 0, 0, 0, 0, 0, 0, 1, 5, 6, 9, 10, 10, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+		{69, 63, 52, 47, 43, 37, 39, 49, 63, 78, 79, 91, 93, 100, 106, 110, 103, 97, 82, 77, 72, 72, 71, 69},
+		{72, 71, 67, 54, 53, 55, 61, 76, 83, 95, 116, 132, 135, 138, 141, 135, 134, 130, 127, 102, 92, 86, 79, 75}, 
+		{162, 153, 153, 141, 132, 136, 147, 167, 193, 184, 201, 224, 246, 254, 247, 246, 238, 230, 206, 203, 191, 185, 175, 169}, 
+		{218, 216, 210, 205, 205, 213, 217, 225, 232, 241, 253, 259, 260, 267, 267, 250, 249, 235, 227, 221, 218, 215, 212, 209}, 
+		{216, 214, 215, 222, 223, 217, 223, 242, 238, 253, 247, 271, 275, 289, 290, 280, 264, 257, 248, 242, 237, 235, 232, 228}, 
+		{246, 243, 237, 229, 227, 225, 227, 233, 250, 260, 249, 267, 267, 270, 274, 266, 268, 260, 249, 240, 233, 230, 226, 221},
+		{234, 229, 227, 222, 212, 207, 213, 223, 236, 241, 247, 259, 264, 242, 234, 220, 219, 215, 218, 217, 199, 185, 182, 181},
+		{212, 217, 217, 219, 219, 221, 223, 209, 200, 197, 195, 196, 193, 193, 194, 197, 196, 197, 197, 192, 196, 193, 197, 196},
+		{151, 145, 137, 130, 126, 121, 118, 127, 132, 163, 167, 173, 191, 196, 189, 176, 164, 156, 143, 147, 149, 142, 138, 131},
+		{116, 110, 102, 88, 82, 80, 79, 81, 80, 82, 79, 80, 76, 75, 79, 81, 78, 80, 79, 77, 71, 65, 53, 48}}
+
+	solarRadiationData := [totalDataNumber][hoursAdayHas]float64{
+		{0, 0, 0, 0, 0, 0, 0, 72, 166, 249, 295, 320, 312, 276, 206, 111, 10, 0, 0, 0, 0, 0, 0, 0}, 
+		{0, 0, 0, 0, 0, 0, 2, 24, 105, 175, 266, 319, 310, 154, 62, 31, 9, 0, 0, 0, 0, 0, 0, 0}, 
+		{0, 0, 0, 0, 0, 0, 16, 103, 204, 278, 320, 352, 298, 294, 201, 131, 37, 9, 0, 0, 0, 0, 0, 0}, 
+		{0, 0, 0, 0, 0, 3, 54, 89,170, 305, 354, 380, 358, 329, 270, 172, 60, 15, 0, 0, 0, 0, 0, 0}, 
+		{0, 0, 0, 0, 1, 15, 74, 155, 227, 234, 315, 354, 349, 313, 252, 133, 48, 20, 3, 0, 0, 0, 0, 0}, 
+		{0, 0, 0, 0, 4, 21, 82, 150, 233, 293, 334, 350, 339, 308, 236, 179, 94, 35, 7, 0, 0, 0, 0, 0}, 
+		{0, 0, 0, 0, 3, 14, 29, 107, 134, 260, 121, 311, 323, 290, 249, 173, 63, 39, 8, 0, 0, 0, 0, 0}, 
+		{0, 0, 0, 0, 1, 7, 25, 46, 163, 232, 142, 245, 199, 160, 237, 175, 94, 37, 5, 0, 0, 0, 0, 0}, 
+		{0, 0, 0, 0, 0, 7, 23, 78, 160, 109, 134, 317, 298, 70, 46, 31, 23, 7, 1, 0, 0, 0, 0, 0}, 
+		{0, 0, 0, 0, 0, 3, 7, 10, 18, 18, 32, 35, 40, 35, 27, 22, 7, 3, 0, 0, 0, 0, 0, 0}, 
+		{0, 0, 0, 0, 0, 0, 31, 37, 53, 143, 142, 155, 261, 269, 199, 110, 31, 0, 0, 0, 0, 0, 0, 0}, 
+		{0, 0, 0, 0, 0, 0, 3, 7, 18, 19, 29, 30, 29, 21, 21, 9, 3, 0, 0, 0, 0, 0, 0, 0}}
+
+	var output [12][24]float64
+	var priceList [12][24]float64
+	var maxOutput float64
+	var minOutput float64
+
+
+	annualIrradiationDeviationFactor := 0.97 // 日射量年変動補正係数
+	efficiencyDeviationFactor := 0.95 // 経時変化補正係数
+	arrayLoadMatchingCorrectionFactor := 0.94 // アレイ負荷整合補正係数
+	arrayLoadCorrectionFactor := 0.97
+	inerterEffectiveEnergyEfficiency := 0.90 // インバータ実効効率
+
+	temperatureFactor := -0.45
+
+	maxOutput = 0
+	minOutput = 100000
+	for i := 0; i < totalDataNumber; i++ {
+		for j := 0; j < hoursAdayHas; j++ {
+			basicDesignFactor := annualIrradiationDeviationFactor * efficiencyDeviationFactor * 
+			arrayLoadMatchingCorrectionFactor * arrayLoadCorrectionFactor * inerterEffectiveEnergyEfficiency
+			
+			totalDesignFactor := basicDesignFactor * (1 + temperatureFactor * (temperatureData[i][j] * 0.1 - 25) / 100)
+
+			output[i][j] = totalDesignFactor * solarRadiationData[i][j] * 10 / 3.6
+			if output[i][j] > maxOutput {
+				maxOutput = output[i][j]
+			}
+			if output[i][j] < minOutput {
+				minOutput = output[i][j]
+			}
+
+		}
+	}
+
+	outPutDifferenceMaxMin := maxOutput - minOutput
+	priceDifference := maxPrice - minPrice
+
+
+	for i := 0; i < totalDataNumber; i++ {
+		for j := 0; j < hoursAdayHas; j++ {
+			outputDifferenceFromMin := output[i][j] - minOutput
+			priceList[i][j] = minPrice + priceDifference * (outputDifferenceFromMin / outPutDifferenceMaxMin)
+		}
+	}
+
+	return priceList
+}
 
 // This type of transaction would typically only be run once by an application the first time it was started after its
 // initial deployment. A new version of the chaincode deployed later would likely not need to run an "init" function.
@@ -112,143 +180,4 @@ func InitLedger(contract *client.Contract) {
 	}
 
 	fmt.Printf("*** Transaction committed successfully\n")
-}
-
-// Evaluate a transaction to query ledger state.
-func GetAllTokens(contract *client.Contract) {
-	fmt.Println("Evaluate Transaction: GetAllTokens, function returns all the current assets on the ledger")
-
-	evaluateResult, err := contract.EvaluateTransaction("GetAllTokens")
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	result := formatJSON(evaluateResult)
-
-	fmt.Printf("*** Result:%s\n", result)
-}
-
-// Submit a transaction synchronously, blocking until it has been committed to the ledger.
-/*
-func CreateToken(contract *client.Contract) {
-	fmt.Printf("Submit Transaction: CreateToken, creates new token with ID, Latitude, Longitude, Owner, Large Category, Small Category and timestamp \n")
-	var timestamp = time.Now()
-	var layout = "2006-01-02T15:04:00Z"
-	var stringTimestamp = timestamp.Format(layout)
-	fmt.Printf("%s\n", stringTimestamp)
-	result, err := contract.SubmitTransaction("CreateToken", assetId, "35", "170", "User2", "Green", "solor", stringTimestamp)
-	if err != nil {
-		panic(fmt.Errorf("failed to submit transaction: %w", err))
-	}
-	//result :=  formatJSON(jsonResult)
-	fmt.Printf("%s\n", result)
-	fmt.Printf("*** Transaction committed successfully\n")
-}*/
-/*
-// Evaluate a transaction by assetID to query ledger state.
-func BidOnToken(contract *client.Contract) {
-	fmt.Printf("Evaluate Transaction: BidOnToken, function returns asset attributes\n")
-	var timestamp = time.Now()
-	var layout = "2006-01-02T15:04:00Z"
-	var stringTimestamp = timestamp.Format(layout)
-	evaluateResult, err := contract.SubmitTransaction("BidOnToken", assetId, "Mayuko", "1", stringTimestamp)
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	//result := formatJSON(evaluateResult)
-
-	fmt.Printf("*** Result:%s\n", evaluateResult)
-}*/
-/*
-func AuctionEnd(contract *client.Contract) {
-	fmt.Printf("Evaluate Transaction: BidOnToken, function returns asset attributes\n")
-	var timestamp = time.Now()
-	var layout = "2006-01-02T15:04:00Z"
-	var stringTimestamp = timestamp.Format(layout)
-	evaluateResult, err := contract.SubmitTransaction("AuctionEnd", assetId, "Mayuko", stringTimestamp)
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	//result := formatJSON(evaluateResult)
-
-	fmt.Printf("*** Result:%s\n", evaluateResult)
-}*/
-
-// Submit transaction asynchronously, blocking until the transaction has been sent to the orderer, and allowing
-// this thread to process the chaincode response (e.g. update a UI) without waiting for the commit notification
-func QueryByStatus(contract *client.Contract) {
-	fmt.Printf("Async Submit Transaction: QueryByStatus'\n")
-
-	evaluateResult, err := contract.EvaluateTransaction("QueryByStatus", "generated")
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	result := formatJSON(evaluateResult)
-
-	fmt.Printf("*** Result:%s\n", result)
-}
-
-func QueryByLocationRange(contract *client.Contract) {
-	fmt.Printf("Async Submit Transaction: QueryByLocationRange'\n")
-
-	evaluateResult, err := contract.EvaluateTransaction("QueryByLocationRange", "generated", "35.54", "35.55", "139.67", "139.68")
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	result := formatJSON(evaluateResult)
-
-	fmt.Printf("*** Result:%s\n", result)
-}
-/*
-func ReadToken(contract *client.Contract) {
-	fmt.Printf("Async Submit Transaction: ReadToken, updates existing asset owner'\n")
-
-	evaluateResult, err := contract.EvaluateTransaction("ReadToken", assetId)
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	result := formatJSON(evaluateResult)
-
-	fmt.Printf("*** Result:%s\n", result)
-}*/
-
-// Submit transaction, passing in the wrong number of arguments ,expected to throw an error containing details of any error responses from the smart contract.
-func ExampleErrorHandling(contract *client.Contract) {
-	fmt.Println("Submit Transaction: UpdateAsset asset70, asset70 does not exist and should return an error")
-
-	_, err := contract.SubmitTransaction("UpdateAsset", "energy4")
-	if err != nil {
-		switch err := err.(type) {
-		case *client.EndorseError:
-			fmt.Printf("Endorse error with gRPC status %v: %s\n", status.Code(err), err)
-		case *client.SubmitError:
-			fmt.Printf("Submit error with gRPC status %v: %s\n", status.Code(err), err)
-		case *client.CommitStatusError:
-			if errors.Is(err, context.DeadlineExceeded) {
-				fmt.Printf("Timeout waiting for transaction %s commit status: %s", err.TransactionID, err)
-			} else {
-				fmt.Printf("Error obtaining commit status with gRPC status %v: %s\n", status.Code(err), err)
-			}
-		case *client.CommitError:
-			fmt.Printf("Transaction %s failed to commit with status %d: %s\n", err.TransactionID, int32(err.Code), err)
-		}
-
-		// Any error that originates from a peer or orderer node external to the gateway will have its details
-		// embedded within the gRPC status error. The following code shows how to extract that.
-		statusErr := status.Convert(err)
-		for _, detail := range statusErr.Details() {
-			switch detail := detail.(type) {
-			case *gateway.ErrorDetail:
-				fmt.Printf("Error from endpoint: %s, mspId: %s, message: %s\n", detail.Address, detail.MspId, detail.Message)
-			}
-		}
-	}
-}
-
-// Format JSON data
-func formatJSON(data []byte) string {
-	var prettyJSON bytes.Buffer
-	if err := json.Indent(&prettyJSON, data, " ", ""); err != nil {
-		panic(fmt.Errorf("failed to parse JSON: %w", err))
-	}
-	return prettyJSON.String()
 }

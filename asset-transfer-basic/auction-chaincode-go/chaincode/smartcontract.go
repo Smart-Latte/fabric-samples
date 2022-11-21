@@ -81,7 +81,7 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 
 func (s *SmartContract) UpdateUnitPrice(ctx contractapi.TransactionContextInterface, 
 	smallCategory string, newUnitPrice float64, timestamp time.Time) error {
-		var id = smallCategory + "power-cost"
+		var id = smallCategory + "-power-cost"
 		cost, err := s.ReadToken(ctx, id)
 		if err != nil {
 			return err
