@@ -11,11 +11,12 @@ package main
 import (
 	//"bytes"
 	//"context"
-	//"encoding/json"
+	"encoding/json"
 	//"errors"
 	"fmt"
 	"time"
 	"strconv"
+	"errors"
 
 	"github.com/hyperledger/fabric-gateway/pkg/client"
 	//"github.com/hyperledger/fabric-protos-go-apiv2/gateway"
@@ -40,23 +41,34 @@ func UpdateSolorUnitPrice(contract *client.Contract) {
 	priceList := price()
 
 	nowTime := time.Now()
-	updateSolor(contract, priceList)
+	var err error
+	err = errors.New("default error")
+	for err != nil {
+		err = updateSolor(contract, priceList)
+	}
 
 	next := time.Date(nowTime.Year(), nowTime.Month(), nowTime.Day(), nowTime.Hour() + 1, 0, 0, 0, time.Local)
 	fmt.Println(next.Sub(nowTime))
 	timer := time.NewTimer(next.Sub(nowTime))
+	err = errors.New("default error")
 	<-timer.C
-	updateSolor(contract, priceList)
+	for err != nil {
+		err = updateSolor(contract, priceList)
+	}
 	
 	ticker := time.NewTicker(time.Hour * 1)
 	for {
+		err = errors.New("default error")
 		<-ticker.C
-		updateSolor(contract, priceList)
+		//cerr := updateSolor(contract, priceList)
+		for err != nil {
+			err = updateSolor(contract, priceList)
+		}
 	}
 
 }
 
-func updateSolor(contract *client.Contract, priceList [totalDataNumber][hoursAdayHas]float64) {
+func updateSolor(contract *client.Contract, priceList [totalDataNumber][hoursAdayHas]float64) error {
 	nowTime := time.Now()
 	month := int(nowTime.Month())
 	hour := int(nowTime.Hour())
@@ -64,10 +76,14 @@ func updateSolor(contract *client.Contract, priceList [totalDataNumber][hoursAda
 	//month: 1-12, hour:0-23
 	price := priceList[month - 1][hour]
 	fmt.Printf("month:%d, hour:%d, price:%g\n", month, hour, price)
-	update(contract, "solor", price)
+	err := update(contract, "solar", price)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func update(contract *client.Contract, smallCategory string, unitPrice float64){
+func update(contract *client.Contract, smallCategory string, unitPrice float64) error {
 
 	fmt.Printf("Submit Transaction: changeUnitPrice\n")
 	var timestamp = time.Now()
@@ -82,11 +98,58 @@ func update(contract *client.Contract, smallCategory string, unitPrice float64){
 	// smallCategory string, newUnitPrice float64, timestamp time.Time
 	_, err := contract.SubmitTransaction("UpdateUnitPrice", smallCategory, stringUnitPrice, stringTimestamp)
 	if err != nil {
-		panic(fmt.Errorf("failed to submit transaction: %w", err))
+		return err
+		// panic(fmt.Errorf("failed to submit transaction: %w", err))
 	}
 
 	fmt.Printf("*** Transaction committed successfully\n")
 
+	energy, err := readToken(contract, "solar-power-cost")
+	if err != nil {
+		return err
+	}
+	fmt.Println(energy)
+	return nil
+
+}
+
+type Energy struct {
+	DocType          string    `json:"DocType`
+	UnitPrice        float64   `json:"Unit Price"`
+	BidPrice         float64   `json:"Bid Price"`
+	GeneratedTime    time.Time `json:"Generated Time"`
+	AuctionStartTime time.Time `json:"Auction Start Time"`
+	// BidTime          time.Time `json:"Bid Time"`
+	ID               string    `json:"ID"`
+	LargeCategory    string    `json:"LargeCategory"`
+	Latitude         float64   `json:"Latitude"`
+	Longitude        float64   `json:"Longitude"`
+	Owner            string    `json:"Owner"`
+	Producer         string    `json:"Producer"`
+	SmallCategory    string    `json:"SmallCategory"`
+	Status           string    `json:"Status"`
+	//MyBidStatus		 string    `json:"My Bid Status"`
+}
+
+func readToken(contract *client.Contract, energyId string) (Energy, error) {
+	fmt.Printf("Async Submit Transaction: ReadToken'\n")
+	result := Energy{}
+	evaluateResult, err := contract.EvaluateTransaction("ReadToken", energyId)
+	if err != nil {
+		return result, err
+		// panic(fmt.Errorf("failed to evaluate transaction: %w", err))
+	}
+	//result := formatJSON(evaluateResult)
+
+	err = json.Unmarshal(evaluateResult, &result)
+	if (err != nil) {
+		return result, err
+		// fmt.Printf("unmarshal error")
+	}
+
+	return result, nil
+
+	//fmt.Printf("*** Result:%s\n", result)
 }
 
 func price() [totalDataNumber][hoursAdayHas]float64 {
@@ -130,7 +193,7 @@ func price() [totalDataNumber][hoursAdayHas]float64 {
 	annualIrradiationDeviationFactor := 0.97 // 日射量年変動補正係数
 	efficiencyDeviationFactor := 0.95 // 経時変化補正係数
 	arrayLoadMatchingCorrectionFactor := 0.94 // アレイ負荷整合補正係数
-	arrayLoadCorrectionFactor := 0.97
+	arrayLoadCorrectionFactor := 0.97 // アレイ回路補正整合補正係数
 	inerterEffectiveEnergyEfficiency := 0.90 // インバータ実効効率
 
 	temperatureFactor := -0.45
@@ -162,7 +225,7 @@ func price() [totalDataNumber][hoursAdayHas]float64 {
 	for i := 0; i < totalDataNumber; i++ {
 		for j := 0; j < hoursAdayHas; j++ {
 			outputDifferenceFromMin := output[i][j] - minOutput
-			priceList[i][j] = minPrice + priceDifference * (outputDifferenceFromMin / outPutDifferenceMaxMin)
+			priceList[i][j] = maxPrice - priceDifference * (outputDifferenceFromMin / outPutDifferenceMaxMin)
 		}
 	}
 

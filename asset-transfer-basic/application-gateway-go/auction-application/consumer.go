@@ -39,10 +39,28 @@ const (
 
 type Input struct {
 	Token int `json:"Token"`
-	BatteryLife float64 `json:"BatteryLife"`
+	BatteryLife int `json:"batteryLife"`
+	Latitude         float64   `json:"latitude"`
+	Longitude        float64   `json:"longitude"`
+	User            string    `json:"user"`
+}
+
+type Return struct {
+	DocType          string    `json:"DocType`
+	UnitPrice        float64   `json:"Unit Price"`
+	BidPrice         float64   `json:"Bid Price"`
+	GeneratedTime    time.Time `json:"Generated Time"`
+	AuctionStartTime time.Time `json:"Auction Start Time"`
+	BidTime          time.Time `json:"Bid Time"`
+	ID               string    `json:"ID"`
+	LargeCategory    string    `json:"LargeCategory"`
 	Latitude         float64   `json:"Latitude"`
 	Longitude        float64   `json:"Longitude"`
-	User            string    `json:"User"`
+	Owner            string    `json:"Owner"`
+	Producer         string    `json:"Producer"`
+	SmallCategory    string    `json:"SmallCategory"`
+	Status           string    `json:"Status"`
+	Error string `json:"Error"`
 }
 
 var now = time.Now()
@@ -64,12 +82,13 @@ func main() {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("hadler")
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed) //405
 		w.Write([]byte("Only POST"))
 		return
 	}
-	if r.Header.Get("Content-Type") != "application/json" {
+	if r.Header.Get("Content-Type") != "application/json; charset=utf-8" {
 		w.WriteHeader(http.StatusBadRequest) //400
 		w.Write([]byte("Only json"))
 		return
@@ -84,18 +103,25 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	err = json.Unmarshal(body, &requestInput)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError) //500
+		fmt.Println("Unmarshal error")
+		fmt.Println(err.Error())
 		w.Write([]byte(err.Error()))
 		return
 	}
 	successList, err := bidContract(requestInput)
 	if err != nil {
+		fmt.Println("bidContract")
+		fmt.Println(err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
+		return
 	}
 
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	if err = enc.Encode(&successList); err != nil {
+		fmt.Println("Encode")
+		fmt.Println(err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
@@ -103,7 +129,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(buf.String()))
 
 	if len(successList) > 0 {
-		go HttpPostBidToken(successList)
+		// go HttpPostBidToken(successList)
 		go bidResultContract(successList, requestInput)
 	}
 }
@@ -129,6 +155,7 @@ func bidContract(input Input) ([]Energy, error) {
 		client.WithCommitStatusTimeout(1*time.Minute),
 	)
 	if err != nil {
+		fmt.Println("gatewayerror")
 		return energies, err
 	}
 	defer gateway.Close()
@@ -136,10 +163,14 @@ func bidContract(input Input) ([]Energy, error) {
 	network := gateway.GetNetwork(channelName)
 	contract := network.GetContract(chaincodeName)
 
-	fmt.Println("initLedger:")
-	InitLedger(contract)
+	//fmt.Println("initLedger:")
+	//InitLedger(contract)
 
-	successList := Buy(contract, input)
+	successList, err := Buy(contract, input)
+	if (err != nil) {
+		fmt.Println("buy error")
+		return energies, err
+	}
 	return successList, nil
 }
 
@@ -163,7 +194,8 @@ func bidResultContract(successList []Energy, input Input) {
 		client.WithCommitStatusTimeout(1*time.Minute),
 	)
 	if err != nil {
-		panic(err)
+		// httpで通知？
+		fmt.Println(err)
 	}
 	defer gateway.Close()
 

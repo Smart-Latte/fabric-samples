@@ -36,21 +36,21 @@ type Energy struct {
 // InitLedger adds a base set of assets to the ledger
 // Owner: Brad, Jin Soo, Max, Adriana, Michel
 func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
-	var time1 = time.Date(2022, 11, 6, 16, 0, 0, 0, time.Local)
-	timestamp, err := ctx.GetStub().GetTxTimestamp()
+	// var time1 = time.Date(2022, 11, 6, 16, 0, 0, 0, time.Local)
+	/*timestamp, err := ctx.GetStub().GetTxTimestamp()
 	if err != nil{
 		return err
 	}
-	time := time.Unix(timestamp.Seconds, int64(timestamp.Nanos))
+	time := time.Unix(timestamp.Seconds, int64(timestamp.Nanos))*/
 
 	energies := []Energy{
-		{DocType: "cost", ID: "solor-power-cost", UnitPrice: 0.02,
-			LargeCategory: "green", SmallCategory: "solor"},
+		{DocType: "cost", ID: "solar-power-cost", UnitPrice: 0.02,
+			LargeCategory: "green", SmallCategory: "solar"},
 		{DocType: "cost", ID: "wind-power-cost", UnitPrice: 0.02,
 			LargeCategory: "green", SmallCategory: "wind"},
-		{DocType: "cost", ID: "thermal-power-cost", UnitPrice: 0.02,
+		{DocType: "cost", ID: "thermal-power-cost", UnitPrice: 0.03,
 			LargeCategory: "depletable", SmallCategory: "thermal"},
-		{DocType:"token", ID: "energy1", LargeCategory: "green", SmallCategory: "solor", Status: "generated", Producer: "User1", Owner: "User1",
+		/*{DocType:"token", ID: "energy1", LargeCategory: "green", SmallCategory: "solor", Status: "generated", Producer: "User1", Owner: "User1",
 		Latitude: 35.547766481196525, Longitude: 39.67124467488006, UnitPrice: 0.02, BidPrice: 0.02, GeneratedTime: time1, AuctionStartTime: time},
 		{DocType:"token", ID: "energy2", LargeCategory: "green", SmallCategory: "solor", Status: "generated", Producer: "User2", Owner: "User2",
 		Latitude: 35.54687478299901, Longitude: 139.67115184675248, UnitPrice: 0.02, BidPrice: 0.02, GeneratedTime: time1, AuctionStartTime: time1},
@@ -61,7 +61,7 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 		{DocType:"token", ID: "energy5", LargeCategory: "green", SmallCategory: "solor", Status: "generated", Producer: "User1", Owner: "User1",
 		Latitude: 35.547766481196525, Longitude: 139.67124467488006, UnitPrice: 0.02, BidPrice: 0.02, GeneratedTime: time1, AuctionStartTime: time1},
 		{DocType:"token", ID: "energy6", LargeCategory: "green", SmallCategory: "solor", Status: "generated", Producer: "User5", Owner: "User5", 
-		Latitude: 35.64914672135123, Longitude: 139.7429409664394, UnitPrice: 0.02, BidPrice: 0.02, GeneratedTime: time1, AuctionStartTime: time1},
+		Latitude: 35.64914672135123, Longitude: 139.7429409664394, UnitPrice: 0.02, BidPrice: 0.02, GeneratedTime: time1, AuctionStartTime: time1},*/
 	}
 
 	for _, energy := range energies {
@@ -96,12 +96,12 @@ func (s *SmartContract) UpdateUnitPrice(ctx contractapi.TransactionContextInterf
 
 		err = ctx.GetStub().PutState(id, costJSON)
 		if err != nil {
-			return "", fmt.Errorf("failed to put to world state. %v", err)
+			return fmt.Errorf("failed to put to world state. %v", err)
 		}
-		return cost
+		return nil
 }
 
-func (s *SmartContract) DiscountUnitPrice(ctx contractapi.TransactionContextInterface, id string) (Energy, error) {
+func (s *SmartContract) DiscountUnitPrice(ctx contractapi.TransactionContextInterface, id string) (error) {
 		energy, err := s.ReadToken(ctx, id)
 		if err != nil {
 			return err

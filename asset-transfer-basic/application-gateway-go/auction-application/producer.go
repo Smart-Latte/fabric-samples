@@ -38,9 +38,10 @@ const (
 )
 
 type Input struct {
-	Latitude         float64   `json:"Latitude"`
-	Longitude        float64   `json:"Longitude"`
-	User            string    `json:"User"`
+	Latitude         float64   `json:"latitude"`
+	Longitude        float64   `json:"longitude"`
+	User            string    `json:"user"`
+	Category string `json:"category"`
 }
 
 var now = time.Now()
@@ -53,16 +54,18 @@ func main() {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("hadler")
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed) //405
 		w.Write([]byte("Only POST"))
 		return
 	}
-	if r.Header.Get("Content-Type") != "application/json" {
+	/*if r.Header.Get("Content-Type") != "application/json" {
 		w.WriteHeader(http.StatusBadRequest) //400
 		w.Write([]byte("Only json"))
 		return
-	}
+	}*/
+	fmt.Println(r.Header.Get("Content-Type"))
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest) //400
@@ -71,12 +74,16 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 	var requestInput Input
 	err = json.Unmarshal(body, &requestInput)
+	// fmt.Println(requestInput)
+	// fmt.Println(err)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError) //500
 		w.Write([]byte(err.Error()))
 		return
 	}
 	createEnergy, timestamp, err := createContract(requestInput)
+	// fmt.Println(createEnergy)
+	// fmt.Println(err)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
@@ -92,9 +99,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Write([]byte(buf.String()))
 
-	go HttpPostCreatedToken(createEnergy)
-
-	go auctionContract(createEnergy, timestamp, requestInput)
+	if createEnergy.Error == "" {
+		go HttpPostCreatedToken(createEnergy)
+		go auctionContract(createEnergy, timestamp, requestInput)
+	}
 
 }
 
@@ -129,9 +137,9 @@ func createContract(input Input) (Energy, time.Time, error) {
 	contract := network.GetContract(chaincodeName)
 
 	fmt.Println("Create:")
-	energy, timestamp, err = Create(contract, input)
+	energy, timestamp = Create(contract, input)
 	
-	return energy, timestamp, err
+	return energy, timestamp, nil
 	//fmt.Println(energy)
 
 }

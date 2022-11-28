@@ -40,6 +40,7 @@ type Energy struct {
 	Producer         string    `json:"Producer"`
 	SmallCategory    string    `json:"SmallCategory"`
 	Status           string    `json:"Status"`
+	Error string `json:"Error"`
 }
 
 const (
@@ -52,10 +53,13 @@ const (
 	layout = "2006-01-02T15:04:05+09:00"
 )
 
-func Create(contract *client.Contract, input Input) (Energy, time.Time, error) {
-	largeCategory := "Green"
-	smallCategory := "solor"
-
+func Create(contract *client.Contract, input Input) (Energy, time.Time) {
+	var largeCategory string
+	if (input.Category == "solar" || input.Category == "wind") {
+		largeCategory = "green"
+	} else {
+		largeCategory = "depletable"
+	}
 	var timestamp = time.Now()
 	rand.Seed(time.Now().UnixNano())
 	// create id
@@ -63,11 +67,11 @@ func Create(contract *client.Contract, input Input) (Energy, time.Time, error) {
 
 	//var energy Energy
 	// create token
-	energy, err := createToken(contract, id, timestamp, largeCategory, smallCategory, input)
+	energy, err := createToken(contract, id, timestamp, largeCategory, input.Category, input)
 	if err != nil {
-		return energy, timestamp, err
+		energy.Error = "createToken: " + err.Error()
 	}
-	return energy, timestamp, nil
+	return energy, timestamp
 	// go auction()
 	// Notification of errors?
 	// fmt.Println(energy)
@@ -77,7 +81,6 @@ func Create(contract *client.Contract, input Input) (Energy, time.Time, error) {
 func Auction(contract *client.Contract, energy Energy, timestamp time.Time, input Input) {
 	ticker := time.NewTicker(time.Minute * auctionEndInterval)
 	count := 0
-
 	// Check for bidders every 5 minutes
 loop:
 	for {
@@ -112,7 +115,7 @@ loop:
 	}
 	// http post
 	resultEnergy, err := readToken(contract, energy.ID)
-	if (err != nil) {
+	if err != nil {
 		fmt.Println(err)
 	} else {
 		fmt.Println(resultEnergy)
@@ -183,16 +186,32 @@ func readToken(contract *client.Contract, energyId string) (Energy, error) {
 }
 
 func HttpPostCreatedToken(energy Energy) {
-	const URL = "https://webhook.site/72017270-cae9-4322-a80c-fd833c85ebf0"
+	// const URL = "https://webhook.site/ba5e750f-7ffd-437b-962b-02ea67be8ca6"
+	const URL = "http://localhost:8090/token"
+	fmt.Println(energy)
+	type CreateToken struct {
+		TokenId          string    `json:"TokenId"`
+		TokenPrice        float64   `json:"TokenPrice"`
+		TokenLat         float64   `json:"TokenLat"`
+		TokenLon        float64   `json:"TokenLon"`
+	}
 
-	energyJson, err := json.Marshal(energy)
+	var token CreateToken
+	token.TokenId = energy.ID
+	token.TokenLat = energy.Latitude
+	token.TokenLon = energy.Longitude
+	token.TokenPrice = energy.UnitPrice
+
+	tokenJson, err := json.Marshal(token)
 	if err != nil {
+		fmt.Printf("err1")
 		fmt.Println(err)
 	}
-	res, err2 := http.Post(URL, "application/json", bytes.NewBuffer(energyJson))
+	res, err2 := http.Post(URL, "application/json", bytes.NewBuffer(tokenJson))
 	defer res.Body.Close()
 
 	if err2 != nil {
+		fmt.Printf("err2")
 		fmt.Println(err2)
 	} else {
 		fmt.Println(res.Status)
@@ -200,13 +219,30 @@ func HttpPostCreatedToken(energy Energy) {
 }
 
 func httpPostAuctionEnd(energy Energy) {
-	const URL = "https://webhook.site/72017270-cae9-4322-a80c-fd833c85ebf0"
+	// const URL = "https://webhook.site/ba5e750f-7ffd-437b-962b-02ea67be8ca6"
+	const URL = "http://localhost:8090/auction"
 
-	energyJson, err := json.Marshal(energy)
+	type AuctionEndToken struct {
+		WinnerCarId string `json:"WinnerCarId"`
+		TokenId string `json:"TokenId"`
+	}
+
+	var token AuctionEndToken
+
+	if energy.Owner != energy.Producer {
+		token.WinnerCarId = energy.Owner
+	} else {
+		token.WinnerCarId = "-1"
+	}
+
+	token.TokenId = energy.ID
+	
+
+	tokenJson, err := json.Marshal(token)
 	if err != nil {
 		fmt.Println(err)
 	}
-	res, err2 := http.Post(URL, "application/json", bytes.NewBuffer(energyJson))
+	res, err2 := http.Post(URL, "application/json", bytes.NewBuffer(tokenJson))
 	defer res.Body.Close()
 
 	if err2 != nil {

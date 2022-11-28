@@ -67,33 +67,6 @@ func main() {
 
 	fmt.Println("Create:")
 	Create(contract)
-	//fmt.Println("initLedger:")
-	//InitLedger(contract)
-
-	//fmt.Println("getAllTokens:")
-	//GetAllTokens(contract)
-
-	// fmt.Println("createToken:")
-	// CreateToken(contract)
-
-	//fmt.Println("BitOnToken:")
-	//BidOnToken(contract)
-
-	// fmt.Println("AuctionEnd:")
-	// AuctionEnd(contract)
-
-	//fmt.Println("ReadToken:")
-	//ReadToken(contract)
-
-	//fmt.Println("QueryByStatus:")
-	//QueryByStatus(contract)
-
-	//fmt.Println("QueryByLocationRange:")
-	//QueryByLocationRange(contract)
-
-	//fmt.Println("exampleErrorHandling:")
-	//ExampleErrorHandling(contract)
-
 	log.Println("============ application-golang ends ============")
 }
 

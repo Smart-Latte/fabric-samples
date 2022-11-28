@@ -11,9 +11,9 @@ package main
 
 import (
 	"bytes"
-	"context"
+	// "context"
 	"encoding/json"
-	"errors"
+	// "errors"
 	"fmt"
 	"time"
 	"strconv"
@@ -23,8 +23,8 @@ import (
 	"net/http"
 	
 	"github.com/hyperledger/fabric-gateway/pkg/client"
-	"github.com/hyperledger/fabric-protos-go-apiv2/gateway"
-	"google.golang.org/grpc/status"
+	// "github.com/hyperledger/fabric-protos-go-apiv2/gateway"
+	// "google.golang.org/grpc/status"
 )
 
 // var assetId = fmt.Sprintf("energy%d", now.Unix()*1e3+int64(now.Nanosecond())/1e6) 
@@ -35,7 +35,7 @@ type Energy struct {
 	BidPrice         float64   `json:"Bid Price"`
 	GeneratedTime    time.Time `json:"Generated Time"`
 	AuctionStartTime time.Time `json:"Auction Start Time"`
-	BidTime          time.Time `json:"Bid Time"`
+	// BidTime          time.Time `json:"Bid Time"`
 	ID               string    `json:"ID"`
 	LargeCategory    string    `json:"LargeCategory"`
 	Latitude         float64   `json:"Latitude"`
@@ -44,29 +44,57 @@ type Energy struct {
 	Producer         string    `json:"Producer"`
 	SmallCategory    string    `json:"SmallCategory"`
 	Status           string    `json:"Status"`
-	//MyBidStatus		 string    `json:"My Bid Status"`
+	Error string `json:"Error"`
+}
+
+type BidResultEnergy struct {
+	DocType          string    `json:"DocType`
+	UnitPrice        float64   `json:"Unit Price"`
+	BidPrice         float64   `json:"Bid Price"`
+	GeneratedTime    time.Time `json:"Generated Time"`
+	AuctionStartTime time.Time `json:"Auction Start Time"`
+	// BidTime          time.Time `json:"Bid Time"`
+	ID               string    `json:"ID"`
+	LargeCategory    string    `json:"LargeCategory"`
+	Latitude         float64   `json:"Latitude"`
+	Longitude        float64   `json:"Longitude"`
+	Owner            string    `json:"Owner"`
+	Producer         string    `json:"Producer"`
+	SmallCategory    string    `json:"SmallCategory"`
+	Status           string    `json:"Status"`
+	MyBidStatus		 string    `json:"My Bid Status"`
+	Error string `json:"Error"`
 }
 
 const (
 	earthRadius = 6378137.0
 	// requestedTokenNum int = 10
 	// batteryLife = 10 //%
-	pricePerMater = 0.01
+	pricePerMater = 0.000001
+	kmPerBattery = 0.05 // battery(%) * kmPerBattery = x km
 	// myLatitude = 35.5552824466371 //0から89まで
 	// myLongitude = 139.65527497388206
 	// username = "user2"
 	layout = "2006-01-02T15:04:05+09:00"
 )
 
-func Buy(contract *client.Contract, input Input) []Energy {
+func Buy(contract *client.Contract, input Input) ([]Energy, error) {
 	// batteryLifeから検索範囲決定
-	searchRange := (100 - input.BatteryLife) * 0.1 * 1000 // 9km * 1000m
+	searchRange := (100 - float64(input.BatteryLife)) * kmPerBattery * 1000 // 1000m->500mに変更
 	fmt.Printf("searchRange:%g\n", searchRange)
 
 	var tokenNum int = input.Token
+	// var errEnergies []Energy
 
 	lowerLat, upperLat, lowerLng, upperLng := determineRange(searchRange, input.Latitude, input.Longitude)
-	energies := queryByLocationRange(contract, lowerLat, upperLat, lowerLng, upperLng)
+	energies, err := queryByLocationRange(contract, lowerLat, upperLat, lowerLng, upperLng)
+	if err != nil {
+		fmt.Println("query error")
+		return energies, err
+	}
+	if(len(energies) == 0){
+		return energies, nil
+	}
 	
 	// fmt.Println(energies)
 	fmt.Printf("length of energies: %d\n", len(energies))
@@ -115,20 +143,33 @@ func Buy(contract *client.Contract, input Input) []Energy {
 		}
 		fmt.Printf("max:%d\n", bidNum)
 
-		tempSuccess := bid(contract, validEnergies, bidNum, input.User)
+		tempSuccess := bid(contract, validEnergies, bidNum, input)
 
 		success = append(success, tempSuccess...)
 		validEnergies = validEnergies[bidNum:]
 		tokenNum -= len(tempSuccess)
 	}
 
-	return success
+	return success, nil
 	
 }
 
-func BidResult(contract *client.Contract, success []Energy, input Input) { 
+func BidResult(contract *client.Contract, successEnergy []Energy, input Input) { 
 
 	// input:success List, input
+	// const length = len(success)
+	// var result[length] int
+	var success []BidResultEnergy
+	for i := 0; i < len(successEnergy); i++{
+		token := BidResultEnergy{DocType: successEnergy[i].DocType, UnitPrice: successEnergy[i].UnitPrice, BidPrice: successEnergy[i].BidPrice, 
+			GeneratedTime: successEnergy[i].GeneratedTime, AuctionStartTime: successEnergy[i].AuctionStartTime, ID: successEnergy[i].ID, 
+			LargeCategory: successEnergy[i].LargeCategory, Latitude: successEnergy[i].Latitude, Longitude: successEnergy[i].Longitude, 
+			Owner: successEnergy[i].Owner, Producer: successEnergy[i].Producer, SmallCategory: successEnergy[i].SmallCategory, Error: successEnergy[i].Error, 
+			Status:successEnergy[i].Status}
+		success = append(success, token)
+	}
+
+
 	var wg sync.WaitGroup
 	wg.Add(len(success))
 	for i := 0; i < len(success) ; i++ {
@@ -142,21 +183,33 @@ func BidResult(contract *client.Contract, success []Energy, input Input) {
 			fmt.Println(auctionEndTime.Sub(nowTime))
 			timer := time.NewTimer(auctionEndTime.Sub(nowTime))
 			<-timer.C
-			auctionEndToken := readToken(contract, success[i].ID)
+			auctionEndToken, err := readToken(contract, success[i].ID)
+			if err != nil {
+				// できたらHTTP
+			} else {
+				auctionEndToken.Error = "OK"
+			}
 			if (auctionEndToken.Owner == input.User) {
-				// notice?
 				fmt.Println("you are a winner.")
+				success[i].MyBidStatus = "win"
 			} else {
 				fmt.Println("you are a loser.")
+				success[i].MyBidStatus = "lose"
 			}
 		}(i)
 	}
-
+	fmt.Println("BidResult:")
+	fmt.Println(success)
 	wg.Wait()
 }
 
+// 現在不使用
 func HttpPostBidToken(energies []Energy) {
-	const URL = "https://webhook.site/72017270-cae9-4322-a80c-fd833c85ebf0"
+	const URL = "https://webhook.site/ba5e750f-7ffd-437b-962b-02ea67be8ca6"
+
+	/*for _, energy := range energies{
+		httpPost(energy);
+	}*/
 
 	energiesJson, err := json.Marshal(energies)
 	if err != nil {
@@ -172,28 +225,68 @@ func HttpPostBidToken(energies []Energy) {
 	}
 }
 
-func readToken(contract *client.Contract, energyId string) Energy {
-	fmt.Printf("Async Submit Transaction: ReadToken'\n")
+func httpPost(energy Energy, input Input) {
+	const URL = "http://localhost:8090/bid"
 
+	type BidToken struct {
+		CarId string `json:"CarId"`
+		CarEnergy int `json:"CarEnergy"`
+		CarRadius float64 `json:"CarRadius"`
+		CarLat float64 `json:"CarLat"`
+		CarLon float64 `json:"CarLon"`
+		Price float64 `json:"Price"`
+		TokenId string `json:"TokenId"`
+	}
+
+	var token BidToken
+	token.CarId = input.User
+	token.CarEnergy = input.BatteryLife
+	token.CarRadius = (100 - float64(input.BatteryLife)) * kmPerBattery
+	token.CarLat = input.Latitude
+	token.CarLon = input.Longitude
+	token.Price = energy.BidPrice
+	token.TokenId = energy.ID
+
+	fmt.Println(token)
+
+	tokenJson, err := json.Marshal(token)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		res, err2 := http.Post(URL, "application/json", bytes.NewBuffer(tokenJson))
+		if err2 != nil {
+			fmt.Println(err2)
+		} else {
+			defer res.Body.Close()
+			fmt.Println(res.Status)
+		}
+	}
+}
+
+func readToken(contract *client.Contract, energyId string) (Energy, error) {
+	fmt.Printf("Async Submit Transaction: ReadToken'\n")
+	var result Energy
 	evaluateResult, err := contract.EvaluateTransaction("ReadToken", energyId)
 	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
+		return result, err
+		// panic(fmt.Errorf("failed to evaluate transaction: %w", err))
 	}
 	//result := formatJSON(evaluateResult)
 
-	result := Energy{}
+	// result := Energy{}
 
 	err = json.Unmarshal(evaluateResult, &result)
 	if (err != nil) {
-		fmt.Printf("unmarshal error")
+		return result, err
+		// fmt.Printf("unmarshal error")
 	}
-
-	return result
+	result.Error = "OK"
+	return result, nil
 
 	//fmt.Printf("*** Result:%s\n", result)
 }
 
-func bid(contract *client.Contract, energies []Energy, bidNum int, username string) ([]Energy) {
+func bid(contract *client.Contract, energies []Energy, bidNum int, input Input) []Energy {
 	successEnergy := []Energy{}
 	//leftEnergy := energies
 	
@@ -203,34 +296,36 @@ func bid(contract *client.Contract, energies []Energy, bidNum int, username stri
 
 		go func(i int, c chan Energy){
 			fmt.Printf("id:%s, auctionStartTime:%s\n", energies[i].ID, energies[i].AuctionStartTime.Format(layout))
-			massage := bidOnToken(contract, energies[i].ID, energies[i].BidPrice, username)
-			fmt.Println(massage)
-			//c <- massage
-			if (massage == "your bid was successful") {
-				bidResult := readToken(contract, energies[i].ID)
+			message, err := bidOnToken(contract, energies[i].ID, energies[i].BidPrice, input.User)
+			if err != nil {
+				energies[i].Error = "bidOnTokenError: " + err.Error()
+				c <- energies[i]
+			}
+			fmt.Println(message)
+			if (message == "your bid was successful") {
+				go httpPost(energies[i], input)
+				bidResult, err := readToken(contract, energies[i].ID)
+				if err != nil {
+					energies[i].Error = "readTokenError: " + err.Error()
+					// energies[i].MyBidStatus = err.Error()
+					c <- energies[i]
+				} else{
+					bidResult.Error = "OK"
+				}
 				c <- bidResult
 				// successEnergy = append(successEnergy, bidResult)
 			// auctionstart + 5min 経ったら見に行く
 			} else {
+				energies[i].Error = "OK"
 				c <- energies[i]
 			}
 		}(i, c)
-		
-		/*fmt.Printf("id:%s, auctionStartTime:%s\n", energies[i].ID, energies[i].AuctionStartTime.Format(layout))
-
-		massage := bidOnToken(contract, energies[i].ID, energies[i].BidPrice, username)
-		fmt.Println(massage)
-		if (massage == "your bid was successful") {
-			bidResult := readToken(contract, energies[i].ID)
-			successEnergy = append(successEnergy, bidResult)
-			// auctionstart + 5min 経ったら見に行く
-		}*/
 
 	}
 
 	for i := 0; i < bidNum; i++ {
 		energy := <-c
-		if (energy.Owner == username) {
+		if (energy.Owner == input.User && energy.Error == "OK") {
 			successEnergy = append(successEnergy, energy)
 		}
 	}
@@ -238,7 +333,7 @@ func bid(contract *client.Contract, energies []Energy, bidNum int, username stri
 	return successEnergy
 }
 
-func bidOnToken(contract *client.Contract, energyId string, bidPrice float64, username string) (string) {
+func bidOnToken(contract *client.Contract, energyId string, bidPrice float64, username string) (string, error) {
 	//fmt.Printf("Evaluate Transaction: BidOnToken, function returns asset attributes\n")
 	var timestamp = time.Now()
 	var stringTimestamp = timestamp.Format(layout)
@@ -246,12 +341,13 @@ func bidOnToken(contract *client.Contract, energyId string, bidPrice float64, us
 	//fmt.Printf("id:%s, timestamp:%s, price:%s\n", energyId, stringTimestamp, stringBidPrice)
 	evaluateResult, err := contract.SubmitTransaction("BidOnToken", energyId, username, stringBidPrice, stringTimestamp)
 	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
+		return "", err
+		// panic(fmt.Errorf("failed to evaluate transaction: %w", err))
 	}
 	//result := formatJSON(evaluateResult)
-	massage := string(evaluateResult)
+	message := string(evaluateResult)
 	/* "your bid was successful" */
-	return massage
+	return message, nil
 }
 
 
@@ -289,7 +385,7 @@ func determineRange(length float64, myLatitude float64, myLongitude float64) (lo
 
 }
 
-func queryByLocationRange(contract *client.Contract, lowerLat float64, upperLat float64, lowerLng float64, upperLng float64) ([]Energy) {
+func queryByLocationRange(contract *client.Contract, lowerLat float64, upperLat float64, lowerLng float64, upperLng float64) ([]Energy, error) {
 	strLowerLat := strconv.FormatFloat(lowerLat, 'f', -1, 64)
 	strUpperLat := strconv.FormatFloat(upperLat, 'f', -1, 64)
 	strLowerLng := strconv.FormatFloat(lowerLng, 'f', -1, 64)
@@ -297,20 +393,21 @@ func queryByLocationRange(contract *client.Contract, lowerLat float64, upperLat 
 
 	fmt.Printf("Async Submit Transaction: QueryByLocationRange'\n")
 
+	result := []Energy{}
 	evaluateResult, err := contract.EvaluateTransaction("QueryByLocationRange", "generated", strLowerLat, strUpperLat, strLowerLng, strUpperLng)
 	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
+		return result, err
+		// panic(fmt.Errorf("failed to evaluate transaction: %w", err))
 	}
 
 	fmt.Println(len(evaluateResult))
-	result := []Energy{}
 
 	err = json.Unmarshal(evaluateResult, &result)
-	if(err != nil) {
-		fmt.Printf("unmarshal error")
+	if(err != nil && len(evaluateResult) > 0) {
+		return result, err
 	}
 
-	return result
+	return result, nil
 
 }
 
@@ -335,156 +432,4 @@ func distance(lat1 float64, lng1 float64, lat2 float64, lng2 float64) float64 {
 	distance := earthRadius * r
 	
 	return distance
-}
-
-
-// This type of transaction would typically only be run once by an application the first time it was started after its
-// initial deployment. A new version of the chaincode deployed later would likely not need to run an "init" function.
-func InitLedger(contract *client.Contract) {
-	fmt.Printf("Submit Transaction: InitLedger, function creates the initial set of assets on the ledger \n")
-
-	_, err := contract.SubmitTransaction("InitLedger")
-	if err != nil {
-		panic(fmt.Errorf("failed to submit transaction: %w", err))
-	}
-
-	fmt.Printf("*** Transaction committed successfully\n")
-}
-
-// Evaluate a transaction to query ledger state.
-func GetAllTokens(contract *client.Contract) {
-	fmt.Println("Evaluate Transaction: GetAllTokens, function returns all the current assets on the ledger")
-
-	evaluateResult, err := contract.EvaluateTransaction("GetAllTokens")
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	result := formatJSON(evaluateResult)
-
-	fmt.Printf("*** Result:%s\n", result)
-}
-/*
-// Submit a transaction synchronously, blocking until it has been committed to the ledger.
-func CreateToken(contract *client.Contract) {
-	fmt.Printf("Submit Transaction: CreateToken, creates new token with ID, Latitude, Longitude, Owner, Large Category, Small Category and timestamp \n")
-	var timestamp = time.Now()
-	var layout = "2006-01-02T15:04:00Z"
-	var stringTimestamp = timestamp.Format(layout)
-	fmt.Printf("%s\n", stringTimestamp)
-	result, err := contract.SubmitTransaction("CreateToken", assetId, "35", "170", "User2", "Green", "solor", stringTimestamp)
-	if err != nil {
-		panic(fmt.Errorf("failed to submit transaction: %w", err))
-	}
-	//result :=  formatJSON(jsonResult)
-	fmt.Printf("%s\n", result)
-	fmt.Printf("*** Transaction committed successfully\n")
-}*/
-/*
-// Evaluate a transaction by assetID to query ledger state.
-func BidOnToken(contract *client.Contract) {
-	fmt.Printf("Evaluate Transaction: BidOnToken, function returns asset attributes\n")
-	//var timestamp = time.Now()
-	//var layout = "2006-01-02T15:04:00Z"
-	//var stringTimestamp = timestamp.Format(layout)
-	evaluateResult, err := contract.SubmitTransaction("BidOnToken", "1000000", "Mayuko", "0.02", "2022-11-13T23:23:00Z")
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	//result := formatJSON(evaluateResult)
-
-	fmt.Printf("*** Result:%s\n", evaluateResult)
-}*/
-/*
-func AuctionEnd(contract *client.Contract) {
-	fmt.Printf("Evaluate Transaction: BidOnToken, function returns asset attributes\n")
-	var timestamp = time.Now()
-	var layout = "2006-01-02T15:04:00Z"
-	var stringTimestamp = timestamp.Format(layout)
-	evaluateResult, err := contract.SubmitTransaction("AuctionEnd", assetId, "Mayuko", stringTimestamp)
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	//result := formatJSON(evaluateResult)
-
-	fmt.Printf("*** Result:%s\n", evaluateResult)
-}
-*/
-// Submit transaction asynchronously, blocking until the transaction has been sent to the orderer, and allowing
-// this thread to process the chaincode response (e.g. update a UI) without waiting for the commit notification
-func QueryByStatus(contract *client.Contract) {
-	fmt.Printf("Async Submit Transaction: QueryByStatus'\n")
-
-	evaluateResult, err := contract.EvaluateTransaction("QueryByStatus", "generated")
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	result := formatJSON(evaluateResult)
-
-	fmt.Printf("*** Result:%s\n", result)
-}
-
-func QueryByLocationRange(contract *client.Contract) {
-	fmt.Printf("Async Submit Transaction: QueryByLocationRange'\n")
-
-	evaluateResult, err := contract.EvaluateTransaction("QueryByLocationRange", "generated", "35.54", "35.55", "139.67", "139.68")
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	result := formatJSON(evaluateResult)
-
-	fmt.Printf("*** Result:%s\n", result)
-}
-/*
-func ReadToken(contract *client.Contract) {
-	fmt.Printf("Async Submit Transaction: ReadToken, updates existing asset owner'\n")
-
-	evaluateResult, err := contract.EvaluateTransaction("ReadToken", assetId)
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	result := formatJSON(evaluateResult)
-
-	fmt.Printf("*** Result:%s\n", result)
-}*/
-
-// Submit transaction, passing in the wrong number of arguments ,expected to throw an error containing details of any error responses from the smart contract.
-func ExampleErrorHandling(contract *client.Contract) {
-	fmt.Println("Submit Transaction: UpdateAsset asset70, asset70 does not exist and should return an error")
-
-	_, err := contract.SubmitTransaction("UpdateAsset", "energy4")
-	if err != nil {
-		switch err := err.(type) {
-		case *client.EndorseError:
-			fmt.Printf("Endorse error with gRPC status %v: %s\n", status.Code(err), err)
-		case *client.SubmitError:
-			fmt.Printf("Submit error with gRPC status %v: %s\n", status.Code(err), err)
-		case *client.CommitStatusError:
-			if errors.Is(err, context.DeadlineExceeded) {
-				fmt.Printf("Timeout waiting for transaction %s commit status: %s", err.TransactionID, err)
-			} else {
-				fmt.Printf("Error obtaining commit status with gRPC status %v: %s\n", status.Code(err), err)
-			}
-		case *client.CommitError:
-			fmt.Printf("Transaction %s failed to commit with status %d: %s\n", err.TransactionID, int32(err.Code), err)
-		}
-
-		// Any error that originates from a peer or orderer node external to the gateway will have its details
-		// embedded within the gRPC status error. The following code shows how to extract that.
-		statusErr := status.Convert(err)
-		for _, detail := range statusErr.Details() {
-			switch detail := detail.(type) {
-			case *gateway.ErrorDetail:
-				fmt.Printf("Error from endpoint: %s, mspId: %s, message: %s\n", detail.Address, detail.MspId, detail.Message)
-			}
-		}
-	}
-}
-
-// Format JSON data
-func formatJSON(data []byte) string {
-	var prettyJSON bytes.Buffer
-	if err := json.Indent(&prettyJSON, data, " ", ""); err != nil {
-		panic(fmt.Errorf("failed to parse JSON: %w", err))
-	}
-	return prettyJSON.String()
 }

@@ -15,6 +15,7 @@ import (
 	"log"
 	"path"
 	"time"
+	"net/http"
 
 	"github.com/hyperledger/fabric-gateway/pkg/client"
 	"github.com/hyperledger/fabric-gateway/pkg/identity"
@@ -38,6 +39,14 @@ var now = time.Now()
 
 func main() {
 	log.Println("============ application-golang starts ============")
+
+	// simulation reset
+	const url = "http://localhost:8090/reset"
+	resp, _ := http.Get(url)
+	defer resp.Body.Close()
+
+	byteArray, _ := ioutil.ReadAll(resp.Body)
+	fmt.Println(string(byteArray))
 
 	// The gRPC client connection should be shared by all Gateway connections to this endpoint
 	clientConnection := newGrpcConnection()
