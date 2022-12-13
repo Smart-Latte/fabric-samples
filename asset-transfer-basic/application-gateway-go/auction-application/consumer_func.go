@@ -244,7 +244,10 @@ func httpPost(energy Energy, input Input) {
 	token.CarRadius = (100 - float64(input.BatteryLife)) * kmPerBattery
 	token.CarLat = input.Latitude
 	token.CarLon = input.Longitude
-	token.Price = energy.BidPrice
+	price := energy.BidPrice
+	token.Price = (math.Round(price * 100000)) / 100000
+	fmt.Println(token.Price);
+	// token.Price = energy.BidPrice
 	token.TokenId = energy.ID
 
 	fmt.Println(token)
